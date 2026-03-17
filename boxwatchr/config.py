@@ -11,6 +11,7 @@ IMAP_FOLDER = os.environ.get("IMAP_FOLDER", "INBOX")
 IMAP_POLL_INTERVAL = int(os.environ.get("IMAP_POLL_INTERVAL", "60"))
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+TESTING = os.environ.get("TESTING", "false").lower() == "true"
 
 SPAM_THRESHOLD = float(os.environ.get("SPAM_THRESHOLD", "5.0"))
 SPAM_ACTION = os.environ.get("SPAM_ACTION", "move").lower()

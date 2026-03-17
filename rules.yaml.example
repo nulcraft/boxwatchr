@@ -1,0 +1,223 @@
+# =============================================================================
+# Boxwatchr Rules Configuration
+# =============================================================================
+
+# Rules are evaluated top to bottom. The first rule that matches an
+# email wins and processing stops. Emails that do not match any rule
+# are left completely alone.
+#
+# Each rule needs a name, a match setting, at least one condition,
+# and at least one action.
+
+# =============================================================================
+# MATCH OPTIONS
+# =============================================================================
+
+# match: all                    Every condition in the rule must be true for it to trigger.
+# match: any                    At least one condition must be true for it to trigger.
+#
+# If you leave out the match setting, it defaults to "all".
+
+# =============================================================================
+# CONDITION FIELDS
+# =============================================================================
+
+# Sender fields:
+#   sender                      The full sender address. Example: tim@walmart.com
+#   sender_local                The part before the @. Example: tim
+#   sender_domain               The full domain including any subdomain.
+#                               Example: mail.walmart.com
+#   sender_domain_name          Everything to the left of the TLD, including
+#                               any subdomain. Example: mail.walmart
+#                               Note: Use sender_domain_root instead if you want
+#                               to match just the registered domain name without
+#                               worrying about subdomains.
+#   sender_domain_root          The registered domain name only, with no subdomain
+#                               and no TLD.
+#                               Example: email.nfl.com gives "nfl"
+#                               Example: mail.walmart.com gives "walmart"
+#                               Example: support.bbc.co.uk gives "bbc"
+#                               This is the recommended field for matching senders
+#                               by company or service name.
+#   sender_domain_tld           Just the TLD. Example: com, org, net, co.uk
+#
+# Recipient fields (matches if ANY recipient satisfies the condition):
+#   recipient                   The full recipient address.
+#   recipient_local             The part before the @.
+#   recipient_domain            The full domain including any subdomain.
+#   recipient_domain_name       Everything to the left of the TLD, including
+#                               any subdomain.
+#   recipient_domain_root       The registered domain name only, with no subdomain
+#                               and no TLD. Same behavior as sender_domain_root.
+#   recipient_domain_tld        Just the TLD.
+#
+# Other fields:
+#   subject                     The email subject line.
+#   raw_headers                 The full raw headers of the email. Useful for
+#                               matching against headers that do not have their
+#                               own dedicated field, such as List-Unsubscribe.
+
+# =============================================================================
+# NORMALIZATION
+# =============================================================================
+
+# The following fields are automatically normalized before being compared
+# against your rule values. Normalization strips everything that is not
+# a letter or a digit, then lowercases the result.
+#
+#   sender_local                no-reply, no_reply, and noreply all match "noreply"
+#   sender_domain_name          mail.walmart and mail-walmart both match "mailwalmart"
+#   sender_domain_root          7-eleven matches "7eleven"
+#   recipient_local             same behavior as sender_local
+#   recipient_domain_name       same behavior as sender_domain_name
+#   recipient_domain_root       same behavior as sender_domain_root
+#
+# This means you only need one rule to catch all common variations of
+# an address. Your rule value should also be written without special
+# characters since both sides are normalized before comparing.
+#
+# When normalization changes the match, Boxwatchr logs exactly what
+# happened. Example: "matched because 'no-reply' normalized to
+# 'noreply' matches 'noreply'".
+#
+# All other fields (sender, sender_domain, sender_domain_tld, subject,
+# raw_headers, and the equivalent recipient fields) are compared exactly
+# as received, with only case folding applied. No normalization.
+
+# =============================================================================
+# CONDITION OPERATORS
+# =============================================================================
+
+# equals                        The field must match the value exactly (case insensitive,
+#                               normalization applied where noted above).
+#                               Example: sender_domain_root equals "walmart" matches
+#                               tim@walmart.com and orders@mail.walmart.com but not
+#                               tim@walmart-fake.com.
+#
+# contains                      The field must contain the value anywhere in it (case
+#                               insensitive, normalization applied where noted above).
+#                               Example: sender_local contains "newsletter" matches
+#                               newsletter@example.com and our-newsletter@example.com.
+#
+# regex                         The value is treated as a full regular expression pattern.
+#                               Normalization is also applied to regex fields listed above.
+#                               Use this for advanced matching that equals and contains
+#                               cannot handle.
+#                               Example: sender_local regex "^[a-z0-9]{12,}$" matches
+#                               sender addresses with 12 or more random characters, which
+#                               is a common pattern in spam.
+
+# =============================================================================
+# ACTIONS
+# =============================================================================
+
+# Move the email to a folder. The folder must already exist on your
+# mail server or the action will fail and Boxwatchr will log an error.
+#
+#   - type: move
+#     destination: FolderName
+#
+# Permanently delete the email. This cannot be undone. Use with caution
+# and test thoroughly with TESTING=true before enabling live.
+#
+#   - type: delete
+#
+# Move the email to your Junk folder as defined by your mail server.
+#
+#   - type: junk
+
+# =============================================================================
+# EXAMPLE RULES
+# =============================================================================
+
+rules:
+  # Catches no-reply, no_reply, noreply, do-not-reply, donotreply,
+  # and any other variation since sender_local is normalized before
+  # comparing. You only need the plain version in your rule value.
+  - name: No reply addresses
+    match: any
+    conditions:
+      - field: sender_local
+        operator: equals
+        value: "noreply"
+    actions:
+      - type: move
+        destination: No Reply
+
+  # Move any email where the local part of the sender contains "newsletter"
+  # to the Newsletters folder. Catches newsletter@walmart.com and
+  # our-newsletter@example.org. Normalization means "our-newsletter"
+  # and "ournewsletter" both match.
+  - name: Move newsletters
+    match: any
+    conditions:
+      - field: sender_local
+        operator: contains
+        value: "newsletter"
+    actions:
+      - type: move
+        destination: Newsletters
+
+  # sender_domain_root correctly handles senders that use subdomains
+  # for sending. email.nfl.com, mail.nfl.com, and nfl.com all give
+  # a domain root of "nfl" so you only need one rule to catch them all.
+  - name: NFL emails
+    match: any
+    conditions:
+      - field: sender_domain_root
+        operator: equals
+        value: "nfl"
+    actions:
+      - type: move
+        destination: Sports
+
+  # Move emails from Walmart that contain "receipt" in the subject
+  # to the Walmart folder. Both conditions must be true since
+  # match is set to all.
+  - name: Walmart receipts
+    match: all
+    conditions:
+      - field: sender_domain_root
+        operator: equals
+        value: "walmart"
+      - field: subject
+        operator: contains
+        value: "receipt"
+    actions:
+      - type: move
+        destination: Walmart
+
+  # Delete emails from any .ru domain outright.
+  - name: Delete Russian TLD
+    match: any
+    conditions:
+      - field: sender_domain_tld
+        operator: equals
+        value: "ru"
+    actions:
+      - type: delete
+
+  # Regex example. Matches sender addresses where the local part is
+  # 10 or more random looking characters, which is a common pattern
+  # in spam and phishing emails.
+  - name: Random looking sender addresses
+    match: any
+    conditions:
+      - field: sender_local
+        operator: regex
+        value: "^[a-z0-9]{10,}$"
+    actions:
+      - type: junk
+
+  # raw_headers example. List-Unsubscribe is a header that legitimate
+  # mailing lists include. Matching on it catches promotional emails
+  # that slipped past the sender and subject checks above.
+  - name: Mailing list emails
+    match: any
+    conditions:
+      - field: raw_headers
+        operator: contains
+        value: "list-unsubscribe"
+    actions:
+      - type: move
+        destination: Newsletters

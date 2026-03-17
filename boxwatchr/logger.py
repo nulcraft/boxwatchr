@@ -7,7 +7,8 @@ class DatabaseHandler(logging.Handler):
         try:
             from boxwatchr.database import insert_log
             logged_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-            insert_log(record.levelname, record.name, record.getMessage(), logged_at)
+            email_id = getattr(record, "email_id", None)
+            insert_log(record.levelname, record.name, record.getMessage(), logged_at, email_id)
         except Exception:
             pass
 
