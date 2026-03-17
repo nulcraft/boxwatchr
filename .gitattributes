@@ -1,0 +1,6 @@
+# Force shell scripts to always use LF line endings.
+# CRLF line endings will break shell scripts running inside Linux containers.
+*.sh text eol=lf
+
+# Force all other text files to use the platform default.
+* text=auto
