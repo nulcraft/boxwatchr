@@ -25,7 +25,6 @@ RSPAMD_PORT = int(os.environ.get("RSPAMD_PORT", "11333"))
 RSPAMD_CONTROLLER_PORT = int(os.environ.get("RSPAMD_CONTROLLER_PORT", "11334"))
 RSPAMD_PASSWORD = os.environ.get("RSPAMD_PASSWORD", "")
 
-WEB_PORT = int(os.environ.get("WEB_PORT", "8080"))
 WEB_PASSWORD = os.environ.get("WEB_PASSWORD", "")
 
 DB_PRUNE_DAYS = int(os.environ.get("DB_PRUNE_DAYS", "0"))

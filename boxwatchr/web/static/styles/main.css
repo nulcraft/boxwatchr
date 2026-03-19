@@ -1,0 +1,598 @@
+/* ============================================================
+   Reset
+   ============================================================ */
+
+*, *::before, *::after {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+
+/* ============================================================
+   Base
+   ============================================================ */
+
+body {
+	background: #111;
+	color: #d0d0d0;
+	font-family: system-ui, -apple-system, sans-serif;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+a {
+	color: #58a6ff;
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+h1 {
+	font-size: 20px;
+	font-weight: 600;
+	color: #fff;
+	margin-bottom: 24px;
+}
+
+h2 {
+	font-size: 15px;
+	font-weight: 600;
+	color: #ccc;
+	margin-bottom: 12px;
+}
+
+code {
+	font-family: monospace;
+	font-size: 12px;
+}
+
+pre {
+	background: #161616;
+	border: 1px solid #2a2a2a;
+	border-radius: 4px;
+	padding: 12px;
+	font-size: 12px;
+	color: #888;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+label {
+	display: block;
+	font-size: 12px;
+	font-weight: 500;
+	color: #888;
+	margin-bottom: 6px;
+	text-transform: uppercase;
+	letter-spacing: 0.4px;
+}
+
+
+/* ============================================================
+   Layout
+   ============================================================ */
+
+.container {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 32px 24px;
+}
+
+
+/* ============================================================
+   Navigation
+   ============================================================ */
+
+nav {
+	background: #1c1c1c;
+	border-bottom: 1px solid #2a2a2a;
+	padding: 0 24px;
+	display: flex;
+	align-items: center;
+	gap: 32px;
+	height: 48px;
+}
+
+nav .brand {
+	font-weight: 700;
+	font-size: 16px;
+	color: #fff;
+	letter-spacing: 0.5px;
+}
+
+nav a {
+	color: #888;
+	font-size: 13px;
+	font-weight: 500;
+	padding: 4px 0;
+	border-bottom: 2px solid transparent;
+}
+
+nav a:hover {
+	color: #d0d0d0;
+	text-decoration: none;
+}
+
+nav a.active {
+	color: #fff;
+	border-bottom-color: #58a6ff;
+}
+
+nav .nav-right {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+
+nav .nav-right a {
+	font-size: 12px;
+	color: #555;
+}
+
+nav .nav-right a:hover {
+	color: #888;
+}
+
+
+/* ============================================================
+   Cards
+   ============================================================ */
+
+.card {
+	background: #1c1c1c;
+	border: 1px solid #2a2a2a;
+	border-radius: 6px;
+	padding: 20px 24px;
+	margin-bottom: 20px;
+}
+
+.card-flush {
+	padding: 0;
+	overflow: hidden;
+}
+
+
+/* ============================================================
+   Tables
+   ============================================================ */
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+
+thead th {
+	text-align: left;
+	padding: 8px 12px;
+	color: #666;
+	font-weight: 500;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	border-bottom: 1px solid #2a2a2a;
+}
+
+tbody tr {
+	border-bottom: 1px solid #1e1e1e;
+}
+
+tbody tr:hover {
+	background: #1e1e1e;
+}
+
+tbody td {
+	padding: 8px 12px;
+	color: #bbb;
+	vertical-align: top;
+}
+
+tbody td a {
+	color: #58a6ff;
+}
+
+.col-subject {
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.col-date {
+	white-space: nowrap;
+	color: #555;
+}
+
+.col-nowrap {
+	white-space: nowrap;
+}
+
+.col-notes {
+	max-width: 320px;
+	color: #666;
+	font-size: 12px;
+}
+
+.empty-row {
+	text-align: center;
+	color: #555;
+	padding: 32px;
+}
+
+
+/* ============================================================
+   Badges
+   ============================================================ */
+
+.badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 10px;
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.badge-spam {
+	background: #3a1a1a;
+	color: #f85149;
+}
+
+.badge-ham {
+	background: #1a2e1a;
+	color: #3fb950;
+}
+
+.badge-pending {
+	background: #2a2a1a;
+	color: #d29922;
+}
+
+.badge-ok {
+	background: #1a2030;
+	color: #58a6ff;
+}
+
+
+/* ============================================================
+   Spam score colors
+   ============================================================ */
+
+.score-high {
+	color: #f85149;
+	font-weight: 600;
+}
+
+.score-med {
+	color: #d29922;
+	font-weight: 600;
+}
+
+.score-low {
+	color: #3fb950;
+}
+
+.score-neg {
+	color: #58a6ff;
+}
+
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+
+.btn {
+	display: inline-block;
+	padding: 6px 14px;
+	border-radius: 4px;
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: opacity 0.15s;
+}
+
+.btn:hover {
+	opacity: 0.8;
+	text-decoration: none;
+}
+
+.btn-ham {
+	background: #1a3a1a;
+	color: #3fb950;
+	border: 1px solid #2a5a2a;
+}
+
+.btn-spam {
+	background: #3a1a1a;
+	color: #f85149;
+	border: 1px solid #5a2020;
+}
+
+
+/* ============================================================
+   Forms
+   ============================================================ */
+
+input[type="password"] {
+	width: 100%;
+	background: #111;
+	border: 1px solid #333;
+	border-radius: 4px;
+	color: #d0d0d0;
+	padding: 9px 12px;
+	font-size: 14px;
+	outline: none;
+	margin-bottom: 20px;
+}
+
+input[type="password"]:focus {
+	border-color: #58a6ff;
+}
+
+.login-box button[type="submit"] {
+	width: 100%;
+	background: #238636;
+	border: none;
+	border-radius: 4px;
+	color: #fff;
+	font-size: 14px;
+	font-weight: 500;
+	padding: 9px;
+	cursor: pointer;
+}
+
+.login-box button[type="submit"]:hover {
+	background: #2ea043;
+}
+
+
+/* ============================================================
+   Flash messages
+   ============================================================ */
+
+.flash-error {
+	background: #2a1515;
+	border: 1px solid #5a2020;
+	color: #f85149;
+	border-radius: 4px;
+	padding: 10px 14px;
+	margin-bottom: 16px;
+	font-size: 13px;
+}
+
+
+/* ============================================================
+   Definition list
+   ============================================================ */
+
+dl {
+	display: grid;
+	grid-template-columns: 180px 1fr;
+	gap: 6px 16px;
+}
+
+dt {
+	color: #555;
+	font-size: 12px;
+	padding-top: 2px;
+}
+
+dd {
+	color: #bbb;
+	word-break: break-word;
+}
+
+
+/* ============================================================
+   Pagination
+   ============================================================ */
+
+.pagination {
+	display: flex;
+	gap: 8px;
+	margin-top: 20px;
+	align-items: center;
+	font-size: 13px;
+}
+
+.pagination a, .pagination span {
+	padding: 4px 12px;
+	border: 1px solid #2a2a2a;
+	border-radius: 4px;
+	color: #888;
+}
+
+.pagination a:hover {
+	border-color: #444;
+	color: #d0d0d0;
+	text-decoration: none;
+}
+
+.pagination span {
+	color: #555;
+}
+
+.pagination .current {
+	border-color: #58a6ff;
+	color: #58a6ff;
+}
+
+
+/* ============================================================
+   Stats page
+   ============================================================ */
+
+.stat-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 16px;
+	margin-bottom: 24px;
+}
+
+.stat-box {
+	background: #1c1c1c;
+	border: 1px solid #2a2a2a;
+	border-radius: 6px;
+	padding: 16px 20px;
+}
+
+.stat-box .label {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: #555;
+	font-weight: 500;
+	margin-bottom: 6px;
+}
+
+.stat-box .value {
+	font-size: 28px;
+	font-weight: 700;
+	color: #fff;
+}
+
+.stat-box.spam .value {
+	color: #f85149;
+}
+
+.stat-box.ham .value {
+	color: #3fb950;
+}
+
+.stat-box.pending .value {
+	color: #d29922;
+}
+
+.stats-cards {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 20px;
+}
+
+.bar-container {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.bar-track {
+	background: #2a2a2a;
+	border-radius: 2px;
+	height: 6px;
+	width: 100px;
+	overflow: hidden;
+}
+
+.bar-fill {
+	background: #58a6ff;
+	height: 6px;
+	width: var(--w, 0%);
+}
+
+.bar-pct {
+	color: #555;
+	font-size: 12px;
+}
+
+.empty-msg {
+	color: #555;
+	font-size: 13px;
+}
+
+
+/* ============================================================
+   Logs page
+   ============================================================ */
+
+.page-subtitle {
+	font-size: 14px;
+	font-weight: 400;
+	color: #555;
+}
+
+
+/* ============================================================
+   Email detail page
+   ============================================================ */
+
+.action-buttons {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.override-label {
+	font-size: 12px;
+	color: #555;
+	margin-top: 10px;
+}
+
+.back-link {
+	margin-top: 16px;
+	font-size: 13px;
+}
+
+
+/* ============================================================
+   Log table
+   ============================================================ */
+
+.log-table td:first-child {
+	white-space: nowrap;
+	color: #555;
+	font-size: 12px;
+}
+
+.log-DEBUG {
+	color: #555;
+}
+
+.log-INFO {
+	color: #bbb;
+}
+
+.log-WARNING {
+	color: #d29922;
+}
+
+.log-ERROR {
+	color: #f85149;
+}
+
+
+/* ============================================================
+   Login page
+   ============================================================ */
+
+body.login-page {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 100vh;
+}
+
+.login-box {
+	background: #1c1c1c;
+	border: 1px solid #2a2a2a;
+	border-radius: 8px;
+	padding: 36px 40px;
+	width: 340px;
+}
+
+.login-box .brand {
+	font-size: 20px;
+	font-weight: 700;
+	color: #fff;
+	margin-bottom: 8px;
+}
+
+.login-box .subtitle {
+	font-size: 13px;
+	color: #555;
+	margin-bottom: 28px;
+}

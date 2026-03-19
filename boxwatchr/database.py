@@ -13,7 +13,7 @@ logger = get_logger("boxwatchr.database")
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "boxwatchr.db")
 
-CURRENT_VERSION = 1
+CURRENT_VERSION = 2
 
 _log_queue = collections.deque()
 _email_queue = collections.deque()
@@ -25,6 +25,8 @@ _last_prune_time = 0.0
 _PRUNE_INTERVAL = 3600.0
 _processing_active = False
 _processing_lock = threading.Lock()
+_flush_failures = 0
+_MAX_FLUSH_FAILURES = 20
 
 
 def set_processing(active):
@@ -85,9 +87,18 @@ def _migrate_v1(conn):
 
     logger.info("Database schema created")
 
+def _migrate_v2(conn):
+    logger.info("Adding message_id and user_action columns to emails table")
+    conn.execute("ALTER TABLE emails ADD COLUMN message_id TEXT")
+    conn.execute("ALTER TABLE emails ADD COLUMN user_action TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id)")
+    logger.info("Migration v2 complete")
+
+
 _MIGRATIONS = [
     None,
     _migrate_v1,
+    _migrate_v2,
 ]
 
 def initialize():
@@ -140,9 +151,17 @@ def start_flusher():
     logger.debug("Database flusher thread started")
 
 def _flush_loop():
+    global _flush_failures
     while True:
         time.sleep(0.25)
         _flush()
+        if _flush_failures >= _MAX_FLUSH_FAILURES:
+            logger.error(
+                "Database flush has failed %s times in a row. Shutting down.",
+                _flush_failures
+            )
+            import os, signal
+            os.kill(1, signal.SIGTERM)
 
 def _maybe_prune(conn):
     global _last_prune_time
@@ -191,8 +210,8 @@ def _flush():
                 INSERT INTO emails (
                     id, uid, folder, sender, recipients, subject, date_received, message_size,
                     spam_score, rule_matched, actions, raw_headers, attachments,
-                    processed, processed_at, processed_notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    processed, processed_at, processed_notes, message_id, user_action
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(uid, folder) DO UPDATE SET
                     sender = excluded.sender,
                     recipients = excluded.recipients,
@@ -205,7 +224,8 @@ def _flush():
                 item["subject"], item["date_received"], item["message_size"],
                 item["spam_score"], item["rule_matched"], item["actions"],
                 item["raw_headers"], item["attachments"],
-                item["processed"], item["processed_at"], item["processed_notes"]
+                item["processed"], item["processed_at"], item["processed_notes"],
+                item["message_id"], item["user_action"]
             ))
 
         for item in updates_batch:
@@ -235,7 +255,12 @@ def _flush():
         conn.commit()
 
     except sqlite3.Error as e:
-        logger.error("Failed to flush queued items to database: %s", e)
+        global _flush_failures
+        _flush_failures += 1
+        logger.error(
+            "Failed to flush queued items to database: %s (%s/%s consecutive failures)",
+            e, _flush_failures, _MAX_FLUSH_FAILURES
+        )
         conn.rollback()
         with _queue_lock:
             for item in reversed(emails_batch):
@@ -244,6 +269,9 @@ def _flush():
                 _log_queue.appendleft(item)
             for item in reversed(updates_batch):
                 _email_update_queue.appendleft(item)
+
+    else:
+        _flush_failures = 0
 
     finally:
         conn.close()
@@ -268,9 +296,60 @@ def clear_email_id_from_logs(email_id):
             if entry.get("email_id") == email_id:
                 entry["email_id"] = None
 
+def get_email_by_message_id(message_id):
+    if not message_id:
+        return None
+    try:
+        conn = get_connection()
+        row = conn.execute(
+            "SELECT * FROM emails WHERE message_id = ? ORDER BY user_action IS NULL ASC, processed_at DESC LIMIT 1",
+            (message_id,)
+        ).fetchone()
+        conn.close()
+        return row
+    except sqlite3.Error as e:
+        logger.error("Failed to query email by message_id: %s", e)
+        return None
+
+
+def update_email_uid(email_id, uid):
+    try:
+        conn = get_connection()
+        conn.execute("UPDATE emails SET uid = ? WHERE id = ?", (uid, email_id))
+        conn.commit()
+        conn.close()
+        logger.debug("Updated UID to %s for email %s", uid, email_id)
+    except sqlite3.Error as e:
+        logger.error("Failed to update UID for email %s: %s", email_id, e)
+        raise
+
+def relink_logs_to_email(old_email_id, new_email_id):
+    with _queue_lock:
+        for entry in _log_queue:
+            if entry.get("email_id") == old_email_id:
+                entry["email_id"] = new_email_id
+
+def set_user_action(email_id, user_action, message_id=None):
+    try:
+        conn = get_connection()
+        if message_id:
+            conn.execute(
+                "UPDATE emails SET user_action = ?, message_id = ? WHERE id = ?",
+                (user_action, message_id, email_id)
+            )
+        else:
+            conn.execute("UPDATE emails SET user_action = ? WHERE id = ?", (user_action, email_id))
+        conn.commit()
+        conn.close()
+        logger.info("Set user_action=%s for email %s", user_action, email_id)
+    except sqlite3.Error as e:
+        logger.error("Failed to set user_action for email %s: %s", email_id, e)
+        raise
+
+
 def enqueue_email(uid, folder, sender, recipients, subject, date_received, message_size,
                   spam_score, rule_matched, actions, raw_headers, attachments, processed,
-                  processed_at, processed_notes, email_id=None):
+                  processed_at, processed_notes, email_id=None, message_id="", user_action=None):
     if email_id is None:
         email_id = str(uuid.uuid4())
     with _queue_lock:
@@ -291,6 +370,8 @@ def enqueue_email(uid, folder, sender, recipients, subject, date_received, messa
             "processed": processed,
             "processed_at": processed_at,
             "processed_notes": processed_notes,
+            "message_id": message_id,
+            "user_action": user_action,
         })
     return email_id
 

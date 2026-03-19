@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}boxwatchr | Logs{% endblock %}
+
+{% block content %}
+<h1>Logs <span class="page-subtitle">{{ total }} total</span></h1>
+
+<div class="card card-flush">
+    <table>
+        <thead>
+            <tr>
+                <th>Sender</th>
+                <th>Subject</th>
+                <th>Date</th>
+                <th>Score</th>
+                <th>Rule</th>
+                <th>Status</th>
+                <th>Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for email in emails %}
+            <tr>
+                <td>
+                    <a href="/email/{{ email.id }}">{{ email.sender or "None" }}</a>
+                </td>
+                <td class="col-subject">{{ email.subject or "None" }}</td>
+                <td class="col-date">{{ email.date_received or "None" }}</td>
+                <td class="col-nowrap">
+                    {% if email.spam_score is not none %}
+                    <span class="{{ email.score_class }}">{{ "%.1f"|format(email.spam_score) }}</span>
+                    {% else %}
+                    None
+                    {% endif %}
+                </td>
+                <td class="col-nowrap">
+                    {% if email.rule_name %}
+                    <span class="badge badge-ok">{{ email.rule_name }}</span>
+                    {% else %}
+                    None
+                    {% endif %}
+                </td>
+                <td>
+                    {% if email.processed %}
+                    <span class="badge badge-ok">Done</span>
+                    {% else %}
+                    <span class="badge badge-pending">Pending</span>
+                    {% endif %}
+                </td>
+                <td class="col-notes">{{ email.processed_notes or "None" }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" class="empty-row">No emails recorded yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="?page={{ page - 1 }}">&larr; Prev</a>
+    {% else %}
+    <span>&larr; Prev</span>
+    {% endif %}
+
+    <span class="current">Page {{ page }} of {{ total_pages }}</span>
+
+    {% if page < total_pages %}
+    <a href="?page={{ page + 1 }}">Next &rarr;</a>
+    {% else %}
+    <span>Next &rarr;</span>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

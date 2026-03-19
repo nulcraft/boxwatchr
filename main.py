@@ -1,4 +1,6 @@
 import sys
+import os
+import signal
 import time
 import uuid
 import json
@@ -6,12 +8,19 @@ from datetime import datetime, timezone
 from email.header import decode_header, make_header
 from email import message_from_bytes, message_from_string
 from boxwatchr import config, imap, spam, rules, health
+from boxwatchr.web.dashboard import start_dashboard
 from boxwatchr.imap import FatalImapError
-from boxwatchr.database import initialize, start_flusher, verify, set_processing, clear_email_id_from_logs, enqueue_email, enqueue_email_update, flush, get_known_uids, get_unprocessed_emails
+from boxwatchr.database import initialize, start_flusher, verify, set_processing, clear_email_id_from_logs, enqueue_email, enqueue_email_update, flush, get_known_uids, get_unprocessed_emails, get_email_by_message_id, update_email_uid, relink_logs_to_email
 from boxwatchr.rules import load_rules, watch_rules, TERMINAL_ACTIONS
 from boxwatchr.logger import get_logger
 
 logger = get_logger("boxwatchr.main")
+
+def _fatal_exit(message):
+    logger.error("Fatal error: %s. Shutting down.", message)
+    flush()
+    os.kill(1, signal.SIGTERM)
+    sys.exit(2)
 
 def _decode(value):
     if isinstance(value, bytes):
@@ -113,6 +122,24 @@ def _learn_sentence(learn_type, dry_run):
         if learn_type == "spam":
             return "Submitted to rspamd as spam."
     return ""
+
+def _verify_rule_destinations(client, loaded_rules):
+    destinations = {
+        action["destination"]
+        for rule in loaded_rules
+        for action in rule["actions"]
+        if action["type"] == "move"
+    }
+    if not destinations:
+        return
+    try:
+        folder_names = imap.list_folder_names(client)
+    except Exception as e:
+        _fatal_exit("Could not list IMAP folders to verify rule destinations: %s" % e)
+    missing = [d for d in sorted(destinations) if d not in folder_names]
+    if missing:
+        _fatal_exit("Rule destination folder(s) not found on server: %s" % ", ".join(missing))
+    logger.info("All rule destination folders verified on server")
 
 def _should_learn(learn_type):
     return (
@@ -324,6 +351,13 @@ def process_email(client, uid, message):
         else:
             raw_headers = raw_text
 
+        message_id = ""
+        try:
+            msg_obj = message_from_bytes(raw_message) if isinstance(raw_message, bytes) else message_from_string(raw_message)
+            message_id = (msg_obj.get("Message-ID") or "").strip()
+        except Exception:
+            pass
+
         attachments = _parse_attachments(raw_message)
 
         email_data = {
@@ -343,6 +377,22 @@ def process_email(client, uid, message):
         spam_score = spam_result["score"]
         matched_rule = rules.evaluate(email_data)
         rule_name = matched_rule["name"] if matched_rule else "none"
+
+        existing = get_email_by_message_id(message_id) if message_id else None
+        user_override = existing["user_action"] if existing is not None else None
+        skip_spam_action = existing is not None and user_override != "spam"
+
+        if skip_spam_action:
+            if user_override == "ham":
+                logger.info(
+                    "Email UID %s was previously marked not spam, skipping spam action",
+                    uid, extra={"email_id": email_id}
+                )
+            else:
+                logger.info(
+                    "Email UID %s was already processed, skipping spam action",
+                    uid, extra={"email_id": email_id}
+                )
 
         learn_type = None
         actions = []
@@ -365,7 +415,7 @@ def process_email(client, uid, message):
                 elif action_type == "mark_unread":
                     actions.append({"type": "mark_unread"})
 
-        elif spam_result["is_spam"]:
+        elif spam_result["is_spam"] and not skip_spam_action:
             learn_type = "spam"
             if config.SPAM_ACTION == "delete":
                 actions.append({"type": "delete", "destination": config.IMAP_TRASH_FOLDER})
@@ -405,30 +455,37 @@ def process_email(client, uid, message):
         processed_notes = " ".join(notes_parts)
 
         processed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        enqueue_email(
-            uid=str(uid),
-            folder=config.IMAP_FOLDER,
-            sender=sender,
-            recipients=",".join(recipients),
-            subject=subject,
-            date_received=date_received,
-            message_size=message_size,
-            spam_score=spam_score,
-            rule_matched=json.dumps(matched_rule) if matched_rule else None,
-            actions=actions,
-            raw_headers=raw_headers,
-            attachments=attachments,
-            processed=0 if config.DRYRUN else 1,
-            processed_at=processed_at,
-            processed_notes=processed_notes,
-            email_id=email_id,
-        )
+
+        if existing is not None:
+            relink_logs_to_email(email_id, existing["id"])
+            update_email_uid(existing["id"], str(uid))
+        else:
+            enqueue_email(
+                uid=str(uid),
+                folder=config.IMAP_FOLDER,
+                sender=sender,
+                recipients=",".join(recipients),
+                subject=subject,
+                date_received=date_received,
+                message_size=message_size,
+                spam_score=spam_score,
+                rule_matched=json.dumps(matched_rule) if matched_rule else None,
+                actions=actions,
+                raw_headers=raw_headers,
+                attachments=attachments,
+                processed=0 if config.DRYRUN else 1,
+                processed_at=processed_at,
+                processed_notes=processed_notes,
+                email_id=email_id,
+                message_id=message_id,
+                user_action=user_override,
+            )
 
         email_enqueued = True
         logger.info(
             "Email UID %s processed: actions=[%s], rule=%s, spam_score=%.2f",
             uid, ", ".join(a["type"] for a in actions) if actions else "none", rule_name, spam_score,
-            extra={"email_id": email_id}
+            extra={"email_id": existing["id"] if existing is not None else email_id}
         )
 
     except Exception as e:
@@ -440,9 +497,13 @@ def process_email(client, uid, message):
         set_processing(False)
 
 def main():
-    initialize()
-    start_flusher()
-    verify()
+    try:
+        initialize()
+        start_flusher()
+        verify()
+    except Exception as e:
+        _fatal_exit("Database initialization failed: %s" % e)
+    start_dashboard()
 
     logger.info("boxwatchr starting up")
     logger.info("Dry run mode: %s", config.DRYRUN)
@@ -451,7 +512,7 @@ def main():
     logger.info("Spam threshold: %.1f, action: %s", config.SPAM_THRESHOLD, config.SPAM_ACTION)
     logger.info("Spam learning: %s, ham threshold: %.1f", config.SPAM_LEARNING, config.HAM_THRESHOLD)
 
-    health.wait_for_services()
+    health.wait_for_services(startup=True)
     health.start_monitor()
 
     if not config.IMAP_TRASH_FOLDER or not config.IMAP_SPAM_FOLDER:
@@ -466,23 +527,29 @@ def main():
                 config.IMAP_TRASH_FOLDER = detected_trash
                 logger.info("Trash folder auto-detected: %s", config.IMAP_TRASH_FOLDER)
             else:
-                logger.error("Trash folder not configured and could not be detected from server. Set IMAP_TRASH_FOLDER in .env")
-                flush()
-                sys.exit(2)
+                _fatal_exit("Trash folder not configured and could not be detected from server. Set IMAP_TRASH_FOLDER in .env")
 
         if not config.IMAP_SPAM_FOLDER:
             if detected_junk:
                 config.IMAP_SPAM_FOLDER = detected_junk
                 logger.info("Spam folder auto-detected: %s", config.IMAP_SPAM_FOLDER)
             else:
-                logger.error("Spam folder not configured and could not be detected from server. Set IMAP_SPAM_FOLDER in .env")
-                flush()
-                sys.exit(2)
+                _fatal_exit("Spam folder not configured and could not be detected from server. Set IMAP_SPAM_FOLDER in .env")
 
     logger.info("Trash folder: %s, spam folder: %s", config.IMAP_TRASH_FOLDER, config.IMAP_SPAM_FOLDER)
 
     logger.info("Loading rules from config/rules.yaml")
-    load_rules("config/rules.yaml")
+    loaded_rules = []
+    try:
+        loaded_rules = load_rules("config/rules.yaml")
+    except Exception:
+        _fatal_exit("Cannot start: fix config/rules.yaml and restart")
+
+    _dest_client = imap.connect()
+    try:
+        _verify_rule_destinations(_dest_client, loaded_rules)
+    finally:
+        _dest_client.logout()
 
     logger.info("Watching config/rules.yaml for changes")
     observer = watch_rules("config/rules.yaml")
@@ -509,11 +576,9 @@ def main():
                 logger.info("Services recovered, reconnecting...")
 
     except FatalImapError as e:
-        logger.error("Fatal error: %s", e)
         observer.stop()
         observer.join()
-        flush()
-        sys.exit(2)
+        _fatal_exit(str(e))
     except KeyboardInterrupt:
         logger.info("Shutting down")
         observer.stop()

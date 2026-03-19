@@ -44,6 +44,14 @@ def fetch_message(client, uid):
         logger.error("Failed to fetch message UID %s: %s", uid, e)
         raise
 
+def list_folder_names(client):
+    try:
+        folders = client.list_folders()
+        return {name for _flags, _delim, name in folders}
+    except Exception as e:
+        logger.error("Failed to list IMAP folders: %s", e)
+        raise
+
 def detect_special_folders(client):
     logger.debug("Detecting special-use folders from server")
     try:

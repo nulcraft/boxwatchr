@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}boxwatchr | Stats{% endblock %}
+
+{% block content %}
+<h1>Stats</h1>
+
+<div class="stat-grid">
+    <div class="stat-box">
+        <div class="label">Total Emails</div>
+        <div class="value">{{ stats.total }}</div>
+    </div>
+    <div class="stat-box spam">
+        <div class="label">Spam Caught</div>
+        <div class="value">{{ stats.spam_caught }}</div>
+    </div>
+    <div class="stat-box ham">
+        <div class="label">Ham Learned</div>
+        <div class="value">{{ stats.ham_learned }}</div>
+    </div>
+    <div class="stat-box pending">
+        <div class="label">Pending</div>
+        <div class="value">{{ stats.pending }}</div>
+    </div>
+</div>
+
+<div class="stats-cards">
+
+    <div class="card">
+        <h2>Spam Score Distribution</h2>
+        {% set bucket_total = stats.score_buckets.values()|sum %}
+        {% if bucket_total > 0 %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Range</th>
+                    <th>Count</th>
+                    <th>Share</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for label, count in stats.score_buckets.items() %}
+                <tr>
+                    <td>{{ label }}</td>
+                    <td>{{ count }}</td>
+                    <td>
+                        <div class="bar-container">
+                            <div class="bar-track">
+                                <div class="bar-fill" style="--w: {{ (count / bucket_total * 100)|int }}%;"></div>
+                            </div>
+                            <span class="bar-pct">{{ "%.0f"|format(count / bucket_total * 100) }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-msg">No data yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2>Rules Matched</h2>
+        {% if stats.rule_counts %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Rule</th>
+                    <th>Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, count in stats.rule_counts %}
+                <tr>
+                    <td>{{ name }}</td>
+                    <td>{{ count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-msg">No rules have matched yet.</p>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

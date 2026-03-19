@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}boxwatchr | Email {{ email.id[:8] }}{% endblock %}
+
+{% block content %}
+<h1>Email Detail</h1>
+
+<div class="card">
+    <h2>Summary</h2>
+    <dl>
+        <dt>ID</dt>
+        <dd><code>{{ email.id }}</code></dd>
+
+        <dt>Sender</dt>
+        <dd>{{ email.sender or "None" }}</dd>
+
+        <dt>Recipients</dt>
+        <dd>{{ email.recipients or "None" }}</dd>
+
+        <dt>Subject</dt>
+        <dd>{{ email.subject or "None" }}</dd>
+
+        <dt>Date Received</dt>
+        <dd>{{ email.date_received or "None" }}</dd>
+
+        <dt>Folder</dt>
+        <dd>{{ email.folder }}</dd>
+
+        <dt>IMAP UID</dt>
+        <dd>{{ email.uid }}</dd>
+
+        <dt>Message Size</dt>
+        <dd>{% if email.message_size %}{{ "{:,}".format(email.message_size) }} bytes{% else %}None{% endif %}</dd>
+
+        <dt>Spam Score</dt>
+        <dd>
+            {% if email.spam_score is not none %}
+            <span class="{{ email.score_class }}">{{ "%.2f"|format(email.spam_score) }}</span>
+            {% else %}
+            None
+            {% endif %}
+        </dd>
+
+        <dt>Status</dt>
+        <dd>
+            {% if email.processed %}
+            <span class="badge badge-ok">Processed</span>
+            {% else %}
+            <span class="badge badge-pending">Pending</span>
+            {% endif %}
+        </dd>
+
+        <dt>Processed At</dt>
+        <dd>{{ email.processed_at or "None" }}</dd>
+
+        <dt>Notes</dt>
+        <dd>{{ email.processed_notes or "None" }}</dd>
+
+        {% if email.rule %}
+        <dt>Rule Matched</dt>
+        <dd>{{ email.rule.name }}</dd>
+        {% endif %}
+
+        {% if email.user_action %}
+        <dt>User Override</dt>
+        <dd>
+            {% if email.user_action == "ham" %}
+            <span class="badge badge-ham">Not Spam</span>
+            {% elif email.user_action == "spam" %}
+            <span class="badge badge-spam">Confirmed Spam</span>
+            {% endif %}
+        </dd>
+        {% endif %}
+    </dl>
+</div>
+
+<div class="card">
+    <h2>Manual Review</h2>
+    <div class="action-buttons">
+        <form method="post" action="/email/{{ email.id }}/not-spam">
+            <button type="submit" class="btn btn-ham">Not Spam (Move to Inbox)</button>
+        </form>
+        <form method="post" action="/email/{{ email.id }}/is-spam">
+            <button type="submit" class="btn btn-spam">Spam (Move to Junk)</button>
+        </form>
+    </div>
+    {% if email.user_action %}
+    <p class="override-label">
+        Current override:
+        {% if email.user_action == "ham" %}not spam (boxwatchr will not junk this message again)
+        {% elif email.user_action == "spam" %}confirmed spam (boxwatchr will re-junk if returned to inbox)
+        {% endif %}
+    </p>
+    {% endif %}
+</div>
+
+{% if email.actions %}
+<div class="card">
+    <h2>Actions Taken</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Destination</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for action in email.actions %}
+            <tr>
+                <td>{{ action.type }}</td>
+                <td>{{ action.destination or "None" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if email.attachments %}
+<div class="card">
+    <h2>Attachments</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Extension</th>
+                <th>Content Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in email.attachments %}
+            <tr>
+                <td>{{ a.name or "None" }}</td>
+                <td>{{ a.extension or "None" }}</td>
+                <td>{{ a.content_type or "None" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if email.raw_headers %}
+<div class="card">
+    <h2>Raw Headers</h2>
+    <pre>{{ email.raw_headers }}</pre>
+</div>
+{% endif %}
+
+{% if logs %}
+<div class="card">
+    <h2>Log Entries</h2>
+    <table class="log-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Level</th>
+                <th>Logger</th>
+                <th>Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr class="log-{{ log.level }}">
+                <td>{{ log.logged_at }}</td>
+                <td>{{ log.level }}</td>
+                <td>{{ log.logger_name }}</td>
+                <td>{{ log.message }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<p class="back-link">
+    <a href="/logs">&larr; Back to logs</a>
+</p>
+{% endblock %}

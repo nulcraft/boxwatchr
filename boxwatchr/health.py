@@ -1,10 +1,12 @@
 import os
+import signal
 import time
 import socket
 import threading
 import requests
 from imapclient import IMAPClient
 from boxwatchr import config
+from boxwatchr.database import flush as flush_db
 from boxwatchr.logger import get_logger
 
 logger = get_logger("boxwatchr.health")
@@ -12,6 +14,7 @@ logger = get_logger("boxwatchr.health")
 _MONITOR_INTERVAL = 60
 _RETRY_INTERVAL = 5
 _MAX_FAILURES = 10
+_STARTUP_TIMEOUT = 300
 
 
 def _tcp_check(host, port):
@@ -40,6 +43,10 @@ def _check_unbound():
     return _tcp_check("127.0.0.1", 5335)
 
 
+def _check_web():
+    return _tcp_check("127.0.0.1", 80)
+
+
 def _check_imap():
     try:
         client = IMAPClient(config.IMAP_HOST, port=config.IMAP_PORT, ssl=True)
@@ -56,6 +63,7 @@ def service_check():
         "rspamd": _check_rspamd,
         "redis": _check_redis,
         "unbound": _check_unbound,
+        "web": _check_web,
         "imap": _check_imap,
     }
     failed = [name for name, fn in checks.items() if not fn()]
@@ -66,13 +74,21 @@ def service_check():
     return True
 
 
-def wait_for_services():
+def wait_for_services(startup=False):
     logger.info("Waiting for all services to be ready")
+    waited = 0
     while True:
         if service_check():
             logger.info("All services are ready")
             return
+        if startup and waited >= _STARTUP_TIMEOUT:
+            logger.error("Services did not come up within %s seconds. Shutting down.", _STARTUP_TIMEOUT)
+            flush_db()
+            os.kill(1, signal.SIGTERM)
+            return
         time.sleep(_RETRY_INTERVAL)
+        if startup:
+            waited += _RETRY_INTERVAL
 
 
 def _monitor_loop():
@@ -90,8 +106,9 @@ def _monitor_loop():
                 consecutive_failures, _MAX_FAILURES
             )
             if consecutive_failures >= _MAX_FAILURES:
-                logger.error("Services unavailable for too long, forcing restart")
-                os._exit(1)
+                logger.error("Services have been unavailable for too long. Shutting down.")
+                flush_db()
+                os.kill(1, signal.SIGTERM)
 
 
 def start_monitor():
