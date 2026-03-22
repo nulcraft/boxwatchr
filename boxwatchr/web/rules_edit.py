@@ -128,6 +128,7 @@ def rule_run(index):
 
     matched = 0
     actioned = 0
+    would_have_actioned = 0
 
     try:
         conn = get_connection()
@@ -269,6 +270,9 @@ def rule_run(index):
                     if action_type in TERMINAL_ACTIONS:
                         break
 
+                if config.DRYRUN:
+                    would_have_actioned += len(executed)
+
                 prefix = "[DRY RUN] " if config.DRYRUN else ""
                 notes_parts = ["%sRule '%s' applied manually." % (prefix, rule["name"])]
                 for a in executed:
@@ -304,6 +308,12 @@ def rule_run(index):
     except Exception as e:
         logger.error("Rule run: IMAP error for rule '%s': %s", rule["name"], e)
 
+    if config.DRYRUN:
+        logger.info("Rule '%s' run manually (DRYRUN): %s matched, %s action(s) would have been taken", rule["name"], matched, would_have_actioned)
+        return redirect(url_for(
+            "rules_list",
+            run_result="[DRY RUN] Rule '%s' ran: %s email(s) matched, %s action(s) would have been taken." % (rule["name"], matched, would_have_actioned)
+        ))
     logger.info("Rule '%s' run manually: %s matched, %s action(s) taken", rule["name"], matched, actioned)
     return redirect(url_for(
         "rules_list",
