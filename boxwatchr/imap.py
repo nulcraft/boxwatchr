@@ -12,6 +12,35 @@ IDLE_TIMEOUT = 1740  # 29 minutes -- RFC 2177 recommended maximum before server-
 _stop_event = threading.Event()
 _reconnect_event = threading.Event()
 
+_folder_list_cache = {"folders": [], "expires": 0.0, "fetching": False}
+_folder_list_lock = threading.Lock()
+
+def get_folder_list():
+    with _folder_list_lock:
+        now = time.monotonic()
+        if _folder_list_cache["expires"] > now:
+            return _folder_list_cache["folders"]
+        if _folder_list_cache["fetching"]:
+            return _folder_list_cache["folders"]
+        _folder_list_cache["fetching"] = True
+
+    try:
+        client = connect()
+        try:
+            folders = sorted(name for flags, delimiter, name in client.list_folders())
+        finally:
+            client.logout()
+    except Exception as e:
+        logger.warning("Could not fetch IMAP folder list: %s", e)
+        folders = []
+
+    with _folder_list_lock:
+        _folder_list_cache["folders"] = folders
+        _folder_list_cache["expires"] = time.monotonic() + 10.0
+        _folder_list_cache["fetching"] = False
+
+    return folders
+
 class FatalImapError(Exception):
     pass
 

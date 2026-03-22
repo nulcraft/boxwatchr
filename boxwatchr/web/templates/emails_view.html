@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "app.html" %}
 {% block title %}boxwatchr | Email {{ email.id[:8] }}{% endblock %}
 
 {% block content %}
@@ -55,9 +55,9 @@
                     <td class="detail-label">Status</td>
                     <td>
                         {% if email.processed %}
-                        <span class="badge badge-ok">Processed</span>
+                        <span class="badge text-bg-primary">Processed</span>
                         {% else %}
-                        <span class="badge badge-pending">Pending</span>
+                        <span class="badge text-bg-warning">Pending</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -80,9 +80,9 @@
                     <td class="detail-label">User Override</td>
                     <td>
                         {% if email.user_action == "ham" %}
-                        <span class="badge badge-ham">Not Spam</span>
+                        <span class="badge text-bg-success">Not Spam</span>
                         {% elif email.user_action == "spam" %}
-                        <span class="badge badge-spam">Confirmed Spam</span>
+                        <span class="badge text-bg-danger">Confirmed Spam</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -99,12 +99,12 @@
             {% if email.spammed or email.user_action == "spam" %}
             <form method="post" action="/emails/{{ email.id }}/not-spam">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-ham">Not Spam, Report as Ham</button>
+                <button type="submit" class="btn btn-success">Not Spam, Report as Ham</button>
             </form>
             {% else %}
             <form method="post" action="/emails/{{ email.id }}/is-spam">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-spam">Not Ham, Report as Spam</button>
+                <button type="submit" class="btn btn-danger">Not Ham, Report as Spam</button>
             </form>
             {% endif %}
         </div>

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "app.html" %}
 {% block title %}boxwatchr | Logs{% endblock %}
 
 {% block content %}
@@ -7,57 +7,65 @@
     <span class="text-secondary small">{{ total }} entries</span>
 </div>
 
-<form method="get" class="d-flex flex-wrap gap-2 align-items-end mb-4">
-    <div>
-        <label class="form-label small text-secondary mb-1">Min level</label>
-        <select name="level" class="form-select form-select-sm">
-            {% for lvl in levels %}
-            <option value="{{ lvl }}"{% if lvl == selected_level %} selected{% endif %}>{{ lvl }}</option>
-            {% endfor %}
-        </select>
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="card-subtitle">Filters</h2>
+        <form method="get" class="d-flex flex-wrap gap-3 align-items-end">
+            <div>
+                <label class="form-label">Min level</label>
+                <select name="level" class="form-select form-select-sm">
+                    {% for lvl in levels %}
+                    <option value="{{ lvl }}"{% if lvl == selected_level %} selected{% endif %}>{{ lvl }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">From</label>
+                <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
+            </div>
+            <div>
+                <label class="form-label">To</label>
+                <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Apply</button>
+                <a href="/logs" class="btn btn-sm btn-outline-secondary">Reset</a>
+            </div>
+        </form>
     </div>
-    <div>
-        <label class="form-label small text-secondary mb-1">From</label>
-        <input type="date" name="date_from" value="{{ date_from }}" class="form-control form-control-sm">
-    </div>
-    <div>
-        <label class="form-label small text-secondary mb-1">To</label>
-        <input type="date" name="date_to" value="{{ date_to }}" class="form-control form-control-sm">
-    </div>
-    <div>
-        <button type="submit" class="btn btn-sm btn-outline-secondary">Apply</button>
-    </div>
-    <div>
-        <a href="/logs" class="btn btn-sm btn-outline-secondary">Reset</a>
-    </div>
-</form>
-
-{% if log_rows %}
-<div class="table-responsive">
-    <table class="table table-sm table-hover">
-        <thead>
-            <tr>
-                <th class="col-date">Time</th>
-                <th>Level</th>
-                <th>Logger</th>
-                <th>Message</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in log_rows %}
-            <tr class="log-{{ row.level }}{% if row.email_id %} log-linked{% endif %}"{% if row.email_id %} onclick="location.href='/emails/{{ row.email_id }}'"{% endif %}>
-                <td class="col-date small">{{ row.logged_at | localtime }}</td>
-                <td class="small">{{ row.level }}</td>
-                <td class="small">{{ row.logger_name }}</td>
-                <td>{{ row.message }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
 </div>
-{% else %}
-<div class="text-center text-secondary py-5">No log entries found.</div>
-{% endif %}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="card-subtitle">Log Entries</h2>
+        {% if log_rows %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover log-table mb-0">
+                <thead>
+                    <tr>
+                        <th class="col-date">Time</th>
+                        <th>Level</th>
+                        <th>Logger</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in log_rows %}
+                    <tr class="log-{{ row.level }}{% if row.email_id %} log-linked{% endif %}"{% if row.email_id %} onclick="location.href='/emails/{{ row.email_id }}'"{% endif %}>
+                        <td class="col-date small">{{ row.logged_at | localtime }}</td>
+                        <td class="small">{{ row.level }}</td>
+                        <td class="small">{{ row.logger_name }}</td>
+                        <td>{{ row.message }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center text-secondary py-4">No log entries found.</div>
+        {% endif %}
+    </div>
+</div>
 
 {% if total_pages > 1 %}
 <nav class="mt-3">

@@ -22,7 +22,7 @@
         <div class="collapse navbar-collapse ms-sm-3" id="navMenu">
             <div class="d-flex flex-column flex-sm-row gap-2 py-2 py-sm-0 align-items-sm-center w-100">
                 {% if not setup_mode %}
-                <a href="/" class="nav-link site-nav-link{% if request.path == '/' %} active{% endif %}">stats</a>
+                <a href="/dashboard" class="nav-link site-nav-link{% if request.path == '/dashboard' %} active{% endif %}">dashboard</a>
                 <a href="/emails" class="nav-link site-nav-link{% if request.path.startswith('/emails') %} active{% endif %}">emails</a>
                 <a href="/logs" class="nav-link site-nav-link{% if request.path == '/logs' %} active{% endif %}">logs</a>
                 <a href="/rules" class="nav-link site-nav-link{% if request.path.startswith('/rules') %} active{% endif %}">rules</a>

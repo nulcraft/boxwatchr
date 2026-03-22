@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "app.html" %}
 {% block title %}boxwatchr | Setup{% endblock %}
 
 {% block content %}
@@ -126,7 +126,7 @@
                 <div class="col-12 col-md-6">
                     <label class="form-label">Web Password</label>
                     <input type="password" name="web_password" class="form-control" autocomplete="new-password">
-                    <div class="form-text">Leave blank to disable password protection. Recommended if you are behind a reverse proxy with its own auth.</div>
+                    <div class="form-text">Leave blank to disable password protection.</div>
                 </div>
             </div>
         </div>

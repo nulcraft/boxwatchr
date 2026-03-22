@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "app.html" %}
 {% block title %}boxwatchr | Emails{% endblock %}
 
 {% block content %}
@@ -14,14 +14,14 @@
             <a href="/emails/{{ email.id }}" class="fw-medium text-truncate stretched-link">{{ email.sender or "Unknown sender" }}</a>
             <div class="d-flex gap-1 flex-shrink-0">
                 {% if email.user_action == "ham" %}
-                <span class="badge badge-ham">Not Spam</span>
+                <span class="badge text-bg-success">Not Spam</span>
                 {% elif email.user_action == "spam" %}
-                <span class="badge badge-spam">Confirmed Spam</span>
+                <span class="badge text-bg-danger">Confirmed Spam</span>
                 {% endif %}
                 {% if email.processed %}
-                <span class="badge badge-ok">Done</span>
+                <span class="badge text-bg-primary">Done</span>
                 {% else %}
-                <span class="badge badge-pending">Pending</span>
+                <span class="badge text-bg-warning">Pending</span>
                 {% endif %}
             </div>
         </div>
@@ -32,7 +32,7 @@
             <span>score: <span class="{{ email.score_class }} fw-semibold">{{ "%.1f"|format(email.spam_score) }}</span></span>
             {% endif %}
             {% if email.rule_name %}
-            <span>rule: <span class="badge badge-ok">{{ email.rule_name }}</span></span>
+            <span>rule: <span class="badge text-bg-primary">{{ email.rule_name }}</span></span>
             {% endif %}
         </div>
         {% if email.processed_notes %}

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from email.header import decode_header, make_header
 from email import message_from_bytes, message_from_string
 from boxwatchr import config, imap, spam, rules, health, __version__
-from boxwatchr.web.dashboard import start_dashboard
+from boxwatchr.web.app import start_dashboard
 from boxwatchr.imap import FatalImapError
 from boxwatchr.notes import action_sentence, failed_action_sentence, skipped_learn_sentence, build_notes_opener
 from boxwatchr.database import set_processing, clear_email_id_from_logs, enqueue_email, enqueue_email_update, get_known_uids, get_unprocessed_emails, get_email_by_message_id, update_email_uid
@@ -192,7 +192,7 @@ def reprocess_pending_emails(client, current_uids):
             "attachments": stored_attachments,
         }
 
-        matched_rule = rules.evaluate(email_data, spam_score=spam_score)
+        matched_rule = rules.evaluate(email_data, spam_score=spam_score, email_id=email_id)
         rule_name = matched_rule["name"] if matched_rule else "none"
         logger.info(
             "Pending email UID %s re-evaluated: rule=%s",
@@ -364,7 +364,7 @@ def process_email(client, uid, message):
         if spam_score is None:
             raise RuntimeError("rspamd unreachable")
 
-        matched_rule = rules.evaluate(email_data, spam_score=spam_score)
+        matched_rule = rules.evaluate(email_data, spam_score=spam_score, email_id=email_id)
         rule_name = matched_rule["name"] if matched_rule else "none"
 
         actions = []

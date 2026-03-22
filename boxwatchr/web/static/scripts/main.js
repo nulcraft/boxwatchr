@@ -1,1 +1,0 @@
-// boxwatchr frontend scripts

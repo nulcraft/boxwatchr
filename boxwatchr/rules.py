@@ -388,7 +388,8 @@ def _apply_operator(operator, field_value, value, field_name, rule_name):
     logger.warning("Unknown operator %r in rule '%s' field %s — condition will not match", operator, rule_name, field_name)
     return False
 
-def check_rule(rule, email_data, spam_score=None):
+def check_rule(rule, email_data, spam_score=None, email_id=None):
+    extra = {"email_id": email_id}
     fields = _extract_fields(email_data)
     fields["rspamd_score"] = spam_score
     conditions = rule["conditions"]
@@ -396,24 +397,27 @@ def check_rule(rule, email_data, spam_score=None):
     logger.debug(
         "check_rule '%s' (match=%s): condition results=%s => %s",
         rule["name"], rule["match"], results,
-        any(results) if rule["match"] == "any" else all(results)
+        any(results) if rule["match"] == "any" else all(results),
+        extra=extra
     )
     if rule["match"] == "any":
         return any(results)
     return all(results)
 
-def evaluate(email, spam_score=None):
+def evaluate(email, spam_score=None, email_id=None):
+    extra = {"email_id": email_id}
     fields = _extract_fields(email)
     fields["rspamd_score"] = spam_score
     logger.debug(
         "Evaluating rules for email from %s (subject=%r)",
-        fields.get("sender", "unknown"), email.get("subject", "")
+        fields.get("sender", "unknown"), email.get("subject", ""),
+        extra=extra
     )
 
     with _rules_lock:
         rules = list(_rules)
 
-    logger.debug("Checking %s rule(s)", len(rules))
+    logger.debug("Checking %s rule(s)", len(rules), extra=extra)
 
     for rule in rules:
         conditions = rule["conditions"]
@@ -422,16 +426,16 @@ def evaluate(email, spam_score=None):
         results = [_match_condition(c, fields, rule["name"]) for c in conditions]
 
         if match_type == "all" and all(results):
-            logger.info("Email matched rule '%s' (match=all, %s/%s conditions met)", rule["name"], sum(results), len(results))
+            logger.info("Email matched rule '%s' (match=all, %s/%s conditions met)", rule["name"], sum(results), len(results), extra=extra)
             return rule
 
         if match_type == "any" and any(results):
-            logger.info("Email matched rule '%s' (match=any, %s/%s conditions met)", rule["name"], sum(results), len(results))
+            logger.info("Email matched rule '%s' (match=any, %s/%s conditions met)", rule["name"], sum(results), len(results), extra=extra)
             return rule
 
-        logger.debug("Rule '%s' did not match (match=%s, results=%s)", rule["name"], match_type, results)
+        logger.debug("Rule '%s' did not match (match=%s, results=%s)", rule["name"], match_type, results, extra=extra)
 
-    logger.debug("Email did not match any rules")
+    logger.debug("Email did not match any rules", extra=extra)
     return None
 
 class _RulesFileHandler(FileSystemEventHandler):

@@ -1,15 +1,68 @@
 /* ============================================================
+   CSS Custom Properties
+   ============================================================ */
+
+:root {
+    /* Typography */
+    --fz-xs:   11px;
+    --fz-sm:   12px;
+    --fz-base: 13px;
+
+    /* Primary (blue) */
+    --c-primary-text:          #cfe2ff;
+    --c-primary-subtle:        #a8cce8;
+    --c-primary-brand:         #7aadd8;
+    --c-primary-ui:            #5d9ee3;
+    --c-primary-grad:          #4878b0;
+    --c-primary-prefix:        #2f5c8e;
+    --c-primary-hover:         #265075;
+    --c-primary:               #1e3d5c;
+    --c-primary-active:        #162d45;
+    --c-primary-dark:          #0f1f30;
+
+    /* Success (green) */
+    --c-success-text:          #d1e7dd;
+    --c-success-hover:         #146c43;
+    --c-success:               #0f5132;
+    --c-success-active:        #0a3d25;
+
+    /* Danger (red) */
+    --c-danger-text:           #f8d7da;
+    --c-danger-hover:          #842029;
+    --c-danger:                #6a1a20;
+    --c-danger-active:         #521318;
+    --c-danger-outline:        #200e0e;
+    --c-danger-outline-hover:  #5a1820;
+    --c-danger-outline-active: #180a0a;
+    --c-danger-bright:         #cc0000;
+
+    /* Warning (yellow) */
+    --c-warning-text:          #fff3cd;
+    --c-warning:               #664d03;
+
+    /* Neutral (gray) */
+    --c-neutral:               #22262b;
+    --c-neutral-hover:         #2d3238;
+    --c-neutral-active:        #1a1e22;
+
+    /* Surfaces */
+    --surface-nav:             rgba(0, 0, 0, 0.25);
+    --surface-nav-link:        rgba(255, 255, 255, 0.07);
+    --surface-card:            rgba(0, 0, 0, 0.15);
+}
+
+/* ============================================================
    Navigation
    ============================================================ */
 
 .site-nav {
-    background-color: rgba(0,0,0,0.25);
+    background-color: var(--surface-nav);
     min-height: 52px;
-    border-bottom: 1px solid rgba(255,255,255,0.15) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
 
 .site-brand {
-    background: linear-gradient(to bottom, #7aadd8, #4878b0);
+    background: linear-gradient(to bottom, var(--c-primary-brand), var(--c-primary-grad));
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -18,8 +71,8 @@
 
 .site-brand::before {
     content: "> ";
-    -webkit-text-fill-color: #2f5c8e;
-    color: #2f5c8e;
+    -webkit-text-fill-color: var(--c-primary-prefix);
+    color: var(--c-primary-prefix);
 }
 
 .site-nav-link {
@@ -31,12 +84,12 @@
 
 .site-nav-link:hover {
     color: var(--bs-body-color);
-    background-color: rgba(255, 255, 255, 0.07);
+    background-color: var(--surface-nav-link);
 }
 
 .site-nav-link.active {
     color: #fff !important;
-    background-color: rgba(255, 255, 255, 0.07);
+    background-color: var(--surface-nav-link);
     font-weight: 500;
 }
 
@@ -67,32 +120,125 @@
 
 body {
     font-family: "Source Code Pro", ui-monospace, monospace;
-    font-size: 13px;
+    font-size: var(--fz-base);
     line-height: 1.6;
 }
 
 /* ============================================================
-   Badges (custom semantic colors on top of Bootstrap .badge base)
+   Labels
+   Shared style for .detail-label, .section-label, .form-label
    ============================================================ */
 
-.badge-spam {
-    background-color: #842029;
-    color: #f8d7da;
+.detail-label,
+.section-label,
+.form-label {
+    font-size: var(--fz-xs) !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--bs-secondary-color) !important;
 }
 
-.badge-ham {
-    background-color: #0f5132;
-    color: #d1e7dd;
+.detail-label {
+    width: 140px;
+    white-space: nowrap;
+    vertical-align: middle;
 }
 
-.badge-pending {
-    background-color: #664d03;
-    color: #fff3cd;
+.section-label {
+    margin-bottom: 8px;
 }
 
-.badge-ok {
-    background-color: #084298;
-    color: #cfe2ff;
+.form-label {
+    margin-bottom: 4px;
+}
+
+/* ============================================================
+   Tables
+   ============================================================ */
+
+.table {
+    --bs-table-bg: transparent;
+    --bs-table-striped-bg: transparent;
+    --bs-table-hover-bg: rgba(255, 255, 255, 0.03);
+}
+
+thead tr {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+th {
+    font-size: var(--fz-sm) !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--bs-secondary-color) !important;
+}
+
+.col-date {
+    white-space: nowrap;
+}
+
+/* ============================================================
+   Cards
+   ============================================================ */
+
+.card-body {
+    background-color: var(--surface-card);
+}
+
+.card-subtitle {
+    color: var(--c-primary-ui) !important;
+    font-weight: 700 !important;
+    font-size: var(--fz-xs) !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--bs-border-color);
+    margin-bottom: 12px;
+}
+
+.card-subtitle::before {
+    color: var(--bs-border-color);
+    content: "// ";
+}
+
+/* Email list cards */
+
+.card.mb-2 {
+    transition: background-color 0.1s;
+    cursor: pointer;
+}
+
+.card.mb-2:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.card.mb-2:active {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.card-spammed {
+    border-left: 3px solid var(--c-danger-bright) !important;
+}
+
+.card-rule {
+    border-left: 3px solid var(--bs-primary) !important;
+}
+
+/* ============================================================
+   Stat cards
+   ============================================================ */
+
+.stat-value {
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.score-progress {
+    height: 6px;
+    max-width: 100px;
 }
 
 /* ============================================================
@@ -113,33 +259,96 @@ body {
     color: var(--bs-success-text-emphasis);
 }
 
+/* ============================================================
+   Badge color overrides
+   ============================================================ */
+
+.text-bg-success {
+    background-color: var(--c-success) !important;
+    color: var(--c-success-text) !important;
+}
+
+.text-bg-danger {
+    background-color: var(--c-danger) !important;
+    color: var(--c-danger-text) !important;
+}
+
+.text-bg-warning {
+    background-color: var(--c-warning) !important;
+    color: var(--c-warning-text) !important;
+}
+
+.text-bg-primary {
+    background-color: var(--c-primary) !important;
+    color: var(--c-primary-text) !important;
+}
 
 /* ============================================================
    Buttons
    ============================================================ */
 
-.btn-ham {
-    font-size: inherit;
-    background-color: #0f5132;
-    color: #d1e7dd;
-    border: 1px solid #146c43;
+.form-control,
+.form-select,
+.btn {
+    font-size: var(--fz-base);
 }
 
-.btn-ham:hover {
-    background-color: #146c43;
-    color: #d1e7dd;
+.btn {
+    --bs-btn-border-color: transparent;
+    --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-border-color: transparent;
+    --bs-btn-disabled-border-color: transparent;
+    text-transform: uppercase;
+    font-weight: 700;
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.8);
 }
 
-.btn-spam {
-    font-size: inherit;
-    background-color: #842029;
-    color: #f8d7da;
-    border: 1px solid #b02a37;
+.btn-primary {
+    --bs-btn-bg: var(--c-primary);
+    --bs-btn-hover-bg: var(--c-primary-hover);
+    --bs-btn-active-bg: var(--c-primary-active);
+    --bs-btn-disabled-bg: var(--c-primary);
 }
 
-.btn-spam:hover {
-    background-color: #b02a37;
-    color: #f8d7da;
+.btn-outline-primary {
+    --bs-btn-bg: var(--c-primary-dark);
+    --bs-btn-color: var(--c-primary-brand);
+    --bs-btn-hover-bg: var(--c-primary);
+    --bs-btn-hover-color: var(--c-primary-subtle);
+    --bs-btn-active-bg: var(--c-primary-active);
+}
+
+.btn-outline-secondary {
+    --bs-btn-bg: var(--c-neutral);
+    --bs-btn-color: var(--bs-secondary-color);
+    --bs-btn-hover-bg: var(--c-neutral-hover);
+    --bs-btn-active-bg: var(--c-neutral-active);
+}
+
+.btn-outline-danger {
+    --bs-btn-bg: var(--c-danger-outline);
+    --bs-btn-color: var(--bs-danger-text-emphasis);
+    --bs-btn-hover-bg: var(--c-danger-outline-hover);
+    --bs-btn-hover-color: var(--c-danger-text);
+    --bs-btn-active-bg: var(--c-danger-outline-active);
+}
+
+.btn-success {
+    --bs-btn-bg: var(--c-success);
+    --bs-btn-color: var(--c-success-text);
+    --bs-btn-hover-bg: var(--c-success-hover);
+    --bs-btn-hover-color: var(--c-success-text);
+    --bs-btn-active-bg: var(--c-success-active);
+    --bs-btn-active-color: var(--c-success-text);
+}
+
+.btn-danger {
+    --bs-btn-bg: var(--c-danger);
+    --bs-btn-color: var(--c-danger-text);
+    --bs-btn-hover-bg: var(--c-danger-hover);
+    --bs-btn-hover-color: var(--c-danger-text);
+    --bs-btn-active-bg: var(--c-danger-active);
+    --bs-btn-active-color: var(--c-danger-text);
 }
 
 @media (max-width: 480px) {
@@ -154,59 +363,25 @@ body {
 }
 
 /* ============================================================
-   Table column constraints
+   Rule editor column widths
    ============================================================ */
 
-.col-date {
-    white-space: nowrap;
+.cond-field {
+    min-width: 200px;
+}
+
+.cond-operator {
+    width: 200px;
+    flex-shrink: 0;
+}
+
+.action-type {
+    width: 210px;
+    flex-shrink: 0;
 }
 
 /* ============================================================
-   Tables
-   ============================================================ */
-
-.table {
-    --bs-table-bg: transparent;
-    --bs-table-striped-bg: transparent;
-    --bs-table-hover-bg: rgba(255, 255, 255, 0.03);
-}
-
-thead tr {
-    background-color: rgba(255, 255, 255, 0.05);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
-
-th {
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--bs-secondary-color) !important;
-}
-
-/* Left-column label cell in key-value detail tables (no thead) */
-.detail-label {
-    width: 140px;
-    white-space: nowrap;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--bs-secondary-color);
-    vertical-align: middle;
-}
-
-/* ============================================================
-   Stat score distribution progress bar
-   ============================================================ */
-
-.score-progress {
-    height: 6px;
-    max-width: 100px;
-}
-
-/* ============================================================
-   Log table row colors
+   Log table
    ============================================================ */
 
 .log-DEBUG td {
@@ -226,101 +401,7 @@ th {
 }
 
 /* ============================================================
-   Card section headings
-   ============================================================ */
-
-.card-subtitle {
-    color: #5d9ee3 !important;
-    font-weight: 700 !important;
-    font-size: 11px !important;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--bs-border-color);
-    margin-bottom: 12px;
-}
-
-.card-subtitle::before {
-    color: var(--bs-border-color);
-    content: "// ";
-}
-
-
-/* ============================================================
-   Rule editor condition/action row column widths
-   ============================================================ */
-
-.cond-field {
-    min-width: 200px;
-}
-
-.cond-operator {
-    width: 200px;
-    flex-shrink: 0;
-}
-
-.action-type {
-    width: 210px;
-    flex-shrink: 0;
-}
-
-/* ============================================================
-   Inline section labels (e.g. "Conditions", "Actions" in rule cards)
-   ============================================================ */
-
-.section-label {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--bs-secondary-color);
-    margin-bottom: 8px;
-}
-
-/* ============================================================
-   Stat cards
-   ============================================================ */
-
-.stat-value {
-    font-size: 28px;
-    font-weight: 700;
-}
-
-/* ============================================================
-   All cards
-   ============================================================ */
-
-.card-body {
-    background-color: rgba(0,0,0,0.15);
-}
-
-/* ============================================================
-   Log cards
-   ============================================================ */
-
-.card-spammed {
-    border-left: 3px solid #cc0000 !important;
-}
-
-.card-rule {
-    border-left: 3px solid #0d6efd !important;
-}
-
-.card.mb-2 {
-    transition: background-color 0.1s;
-    cursor: pointer;
-}
-
-.card.mb-2:hover {
-    background-color: rgba(255, 255, 255, 0.04);
-}
-
-.card.mb-2:active {
-    background-color: rgba(255, 255, 255, 0.07);
-}
-
-/* ============================================================
-   Raw headers pre block
+   Raw headers
    ============================================================ */
 
 pre {
@@ -334,10 +415,10 @@ pre {
    ============================================================ */
 
 .dryrun-banner {
-    background-color: rgba(240,25,25,0.15);
+    background-color: rgba(240, 25, 25, 0.15);
     color: #fff;
-    border-bottom: 1px solid rgba(255,255,255,0.15) !important;
-    box-shadow: 0 0 10px rgba(0,0,0,0.45);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.45);
 }
 
 .dryrun-banner-link {
@@ -348,7 +429,7 @@ pre {
 
 .dryrun-banner-link:hover {
     opacity: 1;
-    color: #f8d7da;
+    color: var(--c-danger-text);
 }
 
 /* ============================================================
@@ -356,32 +437,18 @@ pre {
    ============================================================ */
 
 .login-box {
-    width: 340px;
+    width: 480px;
+    max-width: calc(100vw - 2rem);
+    overflow: hidden;
+}
+
+.login-header {
+    background-color: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: 24px;
 }
 
 .login-brand {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
-}
-
-/* ============================================================
-   Form controls
-   ============================================================ */
-
-.form-control,
-.form-select {
-    font-size: 13px;
-}
-
-/* ============================================================
-   Form labels
-   ============================================================ */
-
-.form-label {
-    font-size: 11px !important;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--bs-secondary-color) !important;
-    margin-bottom: 4px;
 }
