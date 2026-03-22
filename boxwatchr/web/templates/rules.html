@@ -32,11 +32,11 @@
             </div>
             <div class="d-flex gap-2 flex-shrink-0">
                 <a href="/rules/{{ idx }}/edit" class="btn btn-outline-secondary btn-sm">Edit</a>
-                <form method="post" action="/rules/{{ idx }}/run" onsubmit="return confirm('Run rule \'{{ rule.name }}\' against all emails currently in your watched folder?')">
+                <form method="post" action="/rules/{{ idx }}/run" data-rule-name="{{ rule.name }}" onsubmit="return confirm('Run the ' + this.dataset.ruleName + ' rule against all emails in your watched folder?')">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-primary btn-sm">Run Rule</button>
                 </form>
-                <form method="post" action="/rules/{{ idx }}/delete" onsubmit="return confirm('Delete rule \'{{ rule.name }}\'?')">
+                <form method="post" action="/rules/{{ idx }}/delete" data-rule-name="{{ rule.name }}" onsubmit="return confirm('Delete the ' + this.dataset.ruleName + ' rule?')">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
                 </form>

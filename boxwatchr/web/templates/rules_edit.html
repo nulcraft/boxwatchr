@@ -11,7 +11,7 @@
 <div class="alert alert-danger py-2 px-3 small mb-4">{{ error }}</div>
 {% endif %}
 
-<form method="post" action="{{ form_action }}">
+<form method="post" action="{{ form_action }}" onsubmit="prepareSubmit()">
 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
     <div class="card mb-3">
@@ -44,10 +44,7 @@
 
     <div class="card mb-3">
         <div class="card-body">
-            <div class="d-flex align-items-center justify-content-between card-subtitle-row">
-                <h2 class="card-subtitle">Conditions</h2>
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addCondition()">+ Add Condition</button>
-            </div>
+            <h2 class="card-subtitle">Conditions</h2>
 
             <div class="mb-3">
                 <p class="text-secondary small mb-1">For an address like <code>user@mail.example.com</code>:</p>
@@ -109,15 +106,13 @@
             {% if not rule.conditions %}
             <p class="text-secondary small mb-0" id="conditions-empty">No conditions added yet.</p>
             {% endif %}
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="addCondition()">+ Add Condition</button>
         </div>
     </div>
 
     <div class="card mb-4">
         <div class="card-body">
-            <div class="d-flex align-items-center justify-content-between card-subtitle-row">
-                <h2 class="card-subtitle">Actions</h2>
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addAction()">+ Add Action</button>
-            </div>
+            <h2 class="card-subtitle">Actions</h2>
 
             <div id="actions-container">
                 {% for a in rule.actions %}
@@ -125,14 +120,14 @@
                     <select name="action_type" class="form-select action-type" onchange="onActionTypeChange(this)">
                         <option value="move" {% if a.type == "move" %}selected{% endif %}>Move to folder</option>
                         <option value="delete" {% if a.type == "delete" %}selected{% endif %}>Delete</option>
-                        <option value="spam" {% if a.type == "junk" %}selected{% endif %}>Mark as spam</option>
+                        <option value="spam" {% if a.type == "spam" %}selected{% endif %}>Mark as spam</option>
                         <option value="mark_read" {% if a.type == "mark_read" %}selected{% endif %}>Mark as read</option>
                         <option value="mark_unread" {% if a.type == "mark_unread" %}selected{% endif %}>Mark as unread</option>
                         <option value="flag" {% if a.type == "flag" %}selected{% endif %}>Flag message</option>
                         <option value="unflag" {% if a.type == "unflag" %}selected{% endif %}>Remove flag</option>
                     </select>
                     {% if folders %}
-                    <select name="action_destination" class="form-select action-dest flex-grow-1{% if a.type != 'move' %} d-none{% endif %}">
+                    <select name="action_destination" class="form-select action-dest flex-grow-1{% if a.type != 'move' %} d-none{% endif %}"{% if a.type != 'move' %} disabled{% endif %}>
                         <option value="">— Select folder —</option>
                         {% if a.type == 'move' and a.destination and a.destination not in folders %}
                         <option value="{{ a.destination }}" selected>{{ a.destination }} (not found on server)</option>
@@ -142,7 +137,7 @@
                         {% endfor %}
                     </select>
                     {% else %}
-                    <input name="action_destination" type="text" class="form-control action-dest flex-grow-1{% if a.type != 'move' %} d-none{% endif %}" placeholder="Folder (e.g. INBOX.Newsletters)" value="{{ a.destination if a.type == 'move' else '' }}">
+                    <input name="action_destination" type="text" class="form-control action-dest flex-grow-1{% if a.type != 'move' %} d-none{% endif %}" placeholder="Folder (e.g. INBOX.Newsletters)" value="{{ a.destination if a.type == 'move' else '' }}"{% if a.type != 'move' %} disabled{% endif %}>
                     {% endif %}
                     <button type="button" class="btn btn-outline-danger flex-shrink-0" onclick="removeAction(this)">&times;</button>
                 </div>
@@ -152,6 +147,7 @@
             {% if not rule.actions %}
             <p class="text-secondary small mb-0" id="actions-empty">No actions added yet.</p>
             {% endif %}
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="addAction()">+ Add Action</button>
         </div>
     </div>
 
@@ -230,58 +226,5 @@
     </div>
 </template>
 
-<script>
-function onOperatorChange(select) {
-    var row = select.closest(".condition-row");
-    var textInput = row.querySelector(".value-text");
-    var boolSelect = row.querySelector(".value-bool");
-    var isEmpty = select.value === "is_empty";
-    textInput.disabled = isEmpty;
-    textInput.classList.toggle("d-none", isEmpty);
-    boolSelect.disabled = !isEmpty;
-    boolSelect.classList.toggle("d-none", !isEmpty);
-}
-
-function onActionTypeChange(select) {
-    var row = select.closest(".action-row");
-    var destInput = row.querySelector(".action-dest");
-    var isMove = select.value === "move";
-    destInput.classList.toggle("d-none", !isMove);
-}
-
-function removeCondition(btn) {
-    btn.closest(".condition-row").remove();
-    updateEmptyNotice("conditions-container", "conditions-empty");
-}
-
-function removeAction(btn) {
-    btn.closest(".action-row").remove();
-    updateEmptyNotice("actions-container", "actions-empty");
-}
-
-function updateEmptyNotice(containerId, noticeId) {
-    var container = document.getElementById(containerId);
-    var notice = document.getElementById(noticeId);
-    if (!notice) return;
-    notice.classList.toggle("d-none", container.children.length > 0);
-}
-
-function addCondition() {
-    var template = document.getElementById("condition-template");
-    var clone = template.content.cloneNode(true);
-    document.getElementById("conditions-container").appendChild(clone);
-    var notice = document.getElementById("conditions-empty");
-    if (notice) notice.classList.add("d-none");
-}
-
-function addAction() {
-    var template = document.getElementById("action-template");
-    var clone = template.content.cloneNode(true);
-    var typeSelect = clone.querySelector("[name='action_type']");
-    onActionTypeChange(typeSelect);
-    document.getElementById("actions-container").appendChild(clone);
-    var notice = document.getElementById("actions-empty");
-    if (notice) notice.classList.add("d-none");
-}
-</script>
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='scripts/rules_edit.js') }}"></script>{% endblock %}

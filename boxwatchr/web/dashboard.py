@@ -39,6 +39,10 @@ _login_failures_lock = threading.Lock()
 _LOGIN_WINDOW = 60.0
 _LOGIN_MAX_FAILURES = 5
 
+_test_imap_attempts = {}
+_test_imap_lock = threading.Lock()
+_TEST_IMAP_MAX_ATTEMPTS = 10
+
 def _is_rate_limited():
     ip = request.remote_addr or ""
     now = time.monotonic()
@@ -54,6 +58,15 @@ def _record_login_failure():
         failures = _login_failures.get(ip, [])
         failures.append(now)
         _login_failures[ip] = failures
+
+def _test_imap_rate_limited():
+    ip = request.remote_addr or ""
+    now = time.monotonic()
+    with _test_imap_lock:
+        attempts = [t for t in _test_imap_attempts.get(ip, []) if now - t < _LOGIN_WINDOW]
+        attempts.append(now)
+        _test_imap_attempts[ip] = attempts
+        return len(attempts) > _TEST_IMAP_MAX_ATTEMPTS
 
 def _hash_password(password):
     salt = secrets.token_bytes(16)
@@ -172,6 +185,57 @@ def _imap_find_by_message_id(client, message_id, folders):
             logger.debug("Could not search folder %s for message-id %r: %s", folder, message_id, e)
     logger.debug("Message-id %r not found in any of: %s", message_id, folders)
     return None, None
+
+def _learn_from_imap(email_id, raw_headers, learn_type, search_folders):
+    message_id = _extract_message_id(raw_headers)
+    if not message_id or not spam.should_learn(learn_type):
+        logger.debug(
+            "Skipping %s learning for email %s: message_id=%r, should_learn=%s",
+            learn_type, email_id, message_id, spam.should_learn(learn_type)
+        )
+        return
+    logger.debug("Fetching RFC822 for %s learning: email=%s, message_id=%r", learn_type, email_id, message_id)
+    try:
+        client = imap.connect()
+        try:
+            uid, found_folder = _imap_find_by_message_id(client, message_id, search_folders)
+            if uid is not None:
+                logger.debug("Fetching RFC822 for UID %s in %s for %s learning", uid, found_folder, learn_type)
+                result = client.fetch([uid], ["RFC822"])
+                raw_message = result.get(uid, {}).get(b"RFC822", b"")
+                if raw_message:
+                    if learn_type == "spam":
+                        spam.learn_spam(raw_message, email_id=email_id)
+                    else:
+                        spam.learn_ham(raw_message, email_id=email_id)
+                else:
+                    logger.warning("RFC822 body empty for UID %s during %s learning", uid, learn_type)
+            else:
+                logger.warning("Email %s not found in IMAP for %s learning", email_id, learn_type)
+        finally:
+            client.logout()
+    except Exception as e:
+        logger.error("IMAP error during %s learning for email %s: %s", learn_type, email_id, e)
+
+def _resolve_run_actions(rule_actions):
+    actions = []
+    non_terminal = [a for a in rule_actions if a["type"] not in TERMINAL_ACTIONS]
+    terminal = [a for a in rule_actions if a["type"] in TERMINAL_ACTIONS]
+    for action in non_terminal + terminal:
+        action_type = action["type"]
+        if action_type == "delete":
+            if not config.IMAP_TRASH_FOLDER:
+                raise RuntimeError("trash folder not configured — set it in the Config page")
+            actions.append({"type": "delete", "destination": config.IMAP_TRASH_FOLDER})
+        elif action_type == "spam":
+            if not config.IMAP_SPAM_FOLDER:
+                raise RuntimeError("spam folder not configured — set it in the Config page")
+            actions.append({"type": "spam", "destination": config.IMAP_SPAM_FOLDER})
+        elif action_type == "move":
+            actions.append({"type": "move", "destination": action["destination"]})
+        else:
+            actions.append({"type": action_type})
+    return actions
 
 def _get_stats():
     conn = get_connection()
@@ -404,9 +468,12 @@ def test_imap():
     if config.SETUP_COMPLETE and config.WEB_PASSWORD and not session.get("authenticated"):
         return {"error": "Unauthorized."}, 401
 
-    if config.SETUP_COMPLETE:
-        if not _csrf_valid():
-            return {"error": "Invalid CSRF token."}, 403
+    if not _csrf_valid():
+        return {"error": "Invalid CSRF token."}, 403
+
+    if _test_imap_rate_limited():
+        logger.warning("test-imap rate limit exceeded for %s", request.remote_addr)
+        return {"error": "Too many attempts. Try again in a minute."}, 429
 
     data = request.get_json() or {}
     host = data.get("host", "").strip()
@@ -713,7 +780,7 @@ def email_detail(email_id):
 def not_spam(email_id):
     conn = get_connection()
     try:
-        row = conn.execute("SELECT * FROM emails WHERE id = ?", (email_id,)).fetchone()
+        row = conn.execute("SELECT id, raw_headers FROM emails WHERE id = ?", (email_id,)).fetchone()
     except sqlite3.Error as e:
         logger.error("Failed to query email %s for not-spam action: %s", email_id, e)
         raise
@@ -723,38 +790,10 @@ def not_spam(email_id):
     if row is None:
         abort(404)
 
-    message_id = _extract_message_id(row["raw_headers"])
-
     set_user_action(email_id, "ham")
     logger.info("User reported email %s as ham", email_id)
-
-    if message_id and spam.should_learn("ham"):
-        logger.debug("Fetching RFC822 for ham learning: email=%s, message_id=%r", email_id, message_id)
-        try:
-            client = imap.connect()
-            try:
-                search_folders = [config.IMAP_SPAM_FOLDER, config.IMAP_TRASH_FOLDER, config.IMAP_FOLDER]
-                uid, found_folder = _imap_find_by_message_id(client, message_id, search_folders)
-                if uid is not None:
-                    logger.debug("Fetching RFC822 for UID %s in %s for ham learning", uid, found_folder)
-                    result = client.fetch([uid], ["RFC822"])
-                    raw_message = result.get(uid, {}).get(b"RFC822", b"")
-                    if raw_message:
-                        spam.learn_ham(raw_message, email_id=email_id)
-                    else:
-                        logger.warning("RFC822 body empty for UID %s during ham learning", uid)
-                else:
-                    logger.warning("Email %s not found in IMAP for ham learning", email_id)
-            finally:
-                client.logout()
-        except Exception as e:
-            logger.error("IMAP error during ham learning for email %s: %s", email_id, e)
-    else:
-        logger.debug(
-            "Skipping ham learning for email %s: message_id=%r, should_learn=%s",
-            email_id, message_id, spam.should_learn("ham")
-        )
-
+    _learn_from_imap(email_id, row["raw_headers"], "ham",
+                     [config.IMAP_SPAM_FOLDER, config.IMAP_TRASH_FOLDER, config.IMAP_FOLDER])
     return redirect(url_for("email_detail", email_id=email_id))
 
 @app.route("/emails/<email_id>/is-spam", methods=["POST"])
@@ -763,7 +802,7 @@ def not_spam(email_id):
 def is_spam(email_id):
     conn = get_connection()
     try:
-        row = conn.execute("SELECT * FROM emails WHERE id = ?", (email_id,)).fetchone()
+        row = conn.execute("SELECT id, raw_headers FROM emails WHERE id = ?", (email_id,)).fetchone()
     except sqlite3.Error as e:
         logger.error("Failed to query email %s for is-spam action: %s", email_id, e)
         raise
@@ -773,38 +812,10 @@ def is_spam(email_id):
     if row is None:
         abort(404)
 
-    message_id = _extract_message_id(row["raw_headers"])
-
     set_user_action(email_id, "spam")
     logger.info("User reported email %s as spam", email_id)
-
-    if message_id and spam.should_learn("spam"):
-        logger.debug("Fetching RFC822 for spam learning: email=%s, message_id=%r", email_id, message_id)
-        try:
-            client = imap.connect()
-            try:
-                search_folders = [config.IMAP_FOLDER, config.IMAP_SPAM_FOLDER, config.IMAP_TRASH_FOLDER]
-                uid, found_folder = _imap_find_by_message_id(client, message_id, search_folders)
-                if uid is not None:
-                    logger.debug("Fetching RFC822 for UID %s in %s for spam learning", uid, found_folder)
-                    result = client.fetch([uid], ["RFC822"])
-                    raw_message = result.get(uid, {}).get(b"RFC822", b"")
-                    if raw_message:
-                        spam.learn_spam(raw_message, email_id=email_id)
-                    else:
-                        logger.warning("RFC822 body empty for UID %s during spam learning", uid)
-                else:
-                    logger.warning("Email %s not found in IMAP for spam learning", email_id)
-            finally:
-                client.logout()
-        except Exception as e:
-            logger.error("IMAP error during spam learning for email %s: %s", email_id, e)
-    else:
-        logger.debug(
-            "Skipping spam learning for email %s: message_id=%r, should_learn=%s",
-            email_id, message_id, spam.should_learn("spam")
-        )
-
+    _learn_from_imap(email_id, row["raw_headers"], "spam",
+                     [config.IMAP_FOLDER, config.IMAP_SPAM_FOLDER, config.IMAP_TRASH_FOLDER])
     return redirect(url_for("email_detail", email_id=email_id))
 
 _FIELD_LABELS = {
@@ -1058,6 +1069,12 @@ def rule_run(index):
     logger.debug("Rule run: evaluating %s email(s) against rule '%s'", len(rows), rule["name"])
 
     try:
+        resolved_actions = _resolve_run_actions(rule["actions"])
+    except RuntimeError as e:
+        logger.error("Rule run: cannot execute rule '%s': %s", rule["name"], e)
+        return redirect(url_for("rules_list", run_result="Rule '%s' failed: %s" % (rule["name"], e)))
+
+    try:
         client = imap.connect()
         try:
             client.select_folder(config.IMAP_FOLDER)
@@ -1116,40 +1133,16 @@ def rule_run(index):
                         )
                         will_learn = False
 
-                non_terminal = [a for a in rule["actions"] if a["type"] not in TERMINAL_ACTIONS]
-                terminal = [a for a in rule["actions"] if a["type"] in TERMINAL_ACTIONS]
                 executed = []
-
-                for action in non_terminal + terminal:
+                for action in resolved_actions:
                     action_type = action["type"]
-                    full_action = {"type": action_type}
                     logger.debug(
                         "Rule run: executing action %s for UID %s",
                         action_type, uid, extra={"email_id": email_id}
                     )
                     try:
-                        if action_type == "mark_read":
-                            imap.mark_read(client, uid, email_id=email_id)
-                        elif action_type == "mark_unread":
-                            imap.mark_unread(client, uid, email_id=email_id)
-                        elif action_type == "flag":
-                            imap.flag_message(client, uid, email_id=email_id)
-                        elif action_type == "unflag":
-                            imap.unflag_message(client, uid, email_id=email_id)
-                        elif action_type == "delete":
-                            if not config.IMAP_TRASH_FOLDER:
-                                raise RuntimeError("trash folder not configured — set it in the Config page")
-                            full_action["destination"] = config.IMAP_TRASH_FOLDER
-                            imap.move_message(client, uid, config.IMAP_TRASH_FOLDER, email_id=email_id)
-                        elif action_type == "spam":
-                            if not config.IMAP_SPAM_FOLDER:
-                                raise RuntimeError("spam folder not configured — set it in the Config page")
-                            full_action["destination"] = config.IMAP_SPAM_FOLDER
-                            imap.move_message(client, uid, config.IMAP_SPAM_FOLDER, email_id=email_id)
-                        elif action_type == "move":
-                            full_action["destination"] = action["destination"]
-                            imap.move_message(client, uid, action["destination"], email_id=email_id)
-                        executed.append(full_action)
+                        imap.execute_action(client, action, uid, email_id=email_id)
+                        executed.append(action)
                         actioned += 1
                     except Exception as e:
                         logger.error(
@@ -1191,7 +1184,7 @@ def rule_run(index):
                 if not config.DRYRUN:
                     new_entries = [
                         dict({"at": processed_at, "by": "boxwatchr", "action": a["type"]},
-                             **({ "destination": a["destination"] } if "destination" in a else {}))
+                             **{"destination": a["destination"]} if "destination" in a else {})
                         for a in executed
                     ]
                 enqueue_email_update(

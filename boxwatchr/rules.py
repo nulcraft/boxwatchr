@@ -65,7 +65,7 @@ def validate_rule(rule):
         logger.warning("Rule '%s' is missing the required 'learn' field and will be skipped", name)
         return None
 
-    learn = rule.get("learn", "").lower().strip()
+    learn = rule["learn"].lower().strip()
     if learn not in ("spam", "ham"):
         logger.warning("Rule '%s' has invalid learn value '%s'. Must be 'spam' or 'ham' and will be skipped", name, learn)
         return None
@@ -150,13 +150,13 @@ def validate_rule(rule):
         logger.warning("Rule '%s' has no valid actions after validation and will be skipped", name)
         return None
 
-    seen_types = []
+    seen_types = set()
     for action in validated_actions:
         action_type = action["type"]
         if action_type in seen_types:
             logger.warning("Rule '%s' has duplicate action type '%s' and will be skipped", name, action_type)
             return None
-        seen_types.append(action_type)
+        seen_types.add(action_type)
 
     terminal_count = sum(1 for a in validated_actions if a["type"] in TERMINAL_ACTIONS)
     if terminal_count > 1:

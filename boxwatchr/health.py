@@ -203,25 +203,15 @@ def start_imap(loaded_rules):
     while time.monotonic() < deadline:
         logger.debug("Attempting IMAP connection to %s:%s", config.IMAP_HOST, config.IMAP_PORT)
         try:
-            _use_ssl = config.IMAP_TLS_MODE != "none" and config.IMAP_TLS_MODE != "starttls"
-            client = IMAPClient(config.IMAP_HOST, port=config.IMAP_PORT, ssl=_use_ssl)
-            if config.IMAP_TLS_MODE == "starttls":
-                client.starttls()
+            client = _imap.connect()
+        except _imap.FatalImapError as e:
+            logger.error("Fatal: IMAP authentication failed: %s\n\nShutting down.", e)
+            fatal_shutdown()
         except Exception as e:
             last_reason = str(e)
             logger.debug("IMAP connection attempt failed: %s", e)
             time.sleep(_STARTUP_CHECK_INTERVAL)
             continue
-
-        try:
-            client.login(config.IMAP_USERNAME, config.IMAP_PASSWORD)
-        except Exception as e:
-            try:
-                client.logout()
-            except Exception:
-                pass
-            logger.error("Fatal: IMAP authentication failed: %s\n\nShutting down.", e)
-            fatal_shutdown()
 
         logger.info("Connected to %s:%s as %s", config.IMAP_HOST, config.IMAP_PORT, config.IMAP_USERNAME)
         break

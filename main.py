@@ -58,6 +58,51 @@ def _fatal_exit(message):
     logger.error("Shutting down.")
     health.fatal_shutdown()
 
+def _resolve_rule_actions(rule_actions, uid, email_id):
+    actions = []
+    non_terminal = [a for a in rule_actions if a["type"] not in TERMINAL_ACTIONS]
+    terminal = [a for a in rule_actions if a["type"] in TERMINAL_ACTIONS]
+    for action in non_terminal + terminal:
+        action_type = action["type"]
+        if action_type == "move":
+            actions.append({"type": "move", "destination": action["destination"]})
+        elif action_type == "delete":
+            if config.IMAP_TRASH_FOLDER:
+                actions.append({"type": "delete", "destination": config.IMAP_TRASH_FOLDER})
+            else:
+                logger.error(
+                    "Cannot execute 'delete' action for UID %s: trash folder not configured. Set it in the Config page.",
+                    uid, extra={"email_id": email_id}
+                )
+        elif action_type == "spam":
+            if config.IMAP_SPAM_FOLDER:
+                actions.append({"type": "spam", "destination": config.IMAP_SPAM_FOLDER})
+            else:
+                logger.error(
+                    "Cannot execute 'spam' action for UID %s: spam folder not configured. Set it in the Config page.",
+                    uid, extra={"email_id": email_id}
+                )
+        else:
+            actions.append({"type": action_type})
+    return actions
+
+def _resolve_spam_action(uid, email_id):
+    if config.SPAM_ACTION == "delete":
+        if config.IMAP_TRASH_FOLDER:
+            return {"type": "delete", "destination": config.IMAP_TRASH_FOLDER}
+        logger.error(
+            "Cannot move spam email UID %s to trash: trash folder not configured. Set it in the Config page.",
+            uid, extra={"email_id": email_id}
+        )
+    else:
+        if config.IMAP_SPAM_FOLDER:
+            return {"type": "spam", "destination": config.IMAP_SPAM_FOLDER}
+        logger.error(
+            "Cannot move spam email UID %s to spam folder: spam folder not configured. Set it in the Config page.",
+            uid, extra={"email_id": email_id}
+        )
+    return None
+
 def _decode(value):
     if isinstance(value, bytes):
         value = value.decode("utf-8", errors="replace")
@@ -176,55 +221,12 @@ def reprocess_pending_emails(client, current_uids):
         actions = []
 
         if matched_rule:
-            rule_actions = matched_rule["actions"]
-            non_terminal = [a for a in rule_actions if a["type"] not in TERMINAL_ACTIONS]
-            terminal = [a for a in rule_actions if a["type"] in TERMINAL_ACTIONS]
-            for action in non_terminal + terminal:
-                action_type = action["type"]
-                if action_type == "move":
-                    actions.append({"type": "move", "destination": action["destination"]})
-                elif action_type == "delete":
-                    if config.IMAP_TRASH_FOLDER:
-                        actions.append({"type": "delete", "destination": config.IMAP_TRASH_FOLDER})
-                    else:
-                        logger.error(
-                            "Cannot execute 'delete' action for UID %s: trash folder not configured. Set it in the Config page.",
-                            uid, extra={"email_id": email_id}
-                        )
-                elif action_type == "spam":
-                    if config.IMAP_SPAM_FOLDER:
-                        actions.append({"type": "spam", "destination": config.IMAP_SPAM_FOLDER})
-                    else:
-                        logger.error(
-                            "Cannot execute 'spam' action for UID %s: spam folder not configured. Set it in the Config page.",
-                            uid, extra={"email_id": email_id}
-                        )
-                elif action_type == "mark_read":
-                    actions.append({"type": "mark_read"})
-                elif action_type == "mark_unread":
-                    actions.append({"type": "mark_unread"})
-                elif action_type == "flag":
-                    actions.append({"type": "flag"})
-                elif action_type == "unflag":
-                    actions.append({"type": "unflag"})
+            actions = _resolve_rule_actions(matched_rule["actions"], uid, email_id)
 
         elif spam_score is not None and spam_score >= config.SPAM_THRESHOLD:
-            if config.SPAM_ACTION == "delete":
-                if config.IMAP_TRASH_FOLDER:
-                    actions.append({"type": "delete", "destination": config.IMAP_TRASH_FOLDER})
-                else:
-                    logger.error(
-                        "Cannot move spam email UID %s to trash: trash folder not configured. Set it in the Config page.",
-                        uid, extra={"email_id": email_id}
-                    )
-            else:
-                if config.IMAP_SPAM_FOLDER:
-                    actions.append({"type": "spam", "destination": config.IMAP_SPAM_FOLDER})
-                else:
-                    logger.error(
-                        "Cannot move spam email UID %s to spam folder: spam folder not configured. Set it in the Config page.",
-                        uid, extra={"email_id": email_id}
-                    )
+            spam_action = _resolve_spam_action(uid, email_id)
+            if spam_action:
+                actions.append(spam_action)
 
         logger.debug(
             "Pending email UID %s: %s action(s) to execute: %s",
@@ -236,26 +238,14 @@ def reprocess_pending_emails(client, current_uids):
         executed = []
         for action in actions:
             action_type = action["type"]
-            dest = action.get("destination")
             logger.info(
                 "Reprocessing pending email UID %s: action=%s, destination=%s, rule=%s",
-                uid, action_type, dest or "none", rule_name,
+                uid, action_type, action.get("destination") or "none", rule_name,
                 extra={"email_id": email_id}
             )
             try:
-                if action_type == "mark_read":
-                    imap.mark_read(client, uid, email_id=email_id)
-                elif action_type == "mark_unread":
-                    imap.mark_unread(client, uid, email_id=email_id)
-                elif action_type == "flag":
-                    imap.flag_message(client, uid, email_id=email_id)
-                elif action_type == "unflag":
-                    imap.unflag_message(client, uid, email_id=email_id)
-                elif action_type in TERMINAL_ACTIONS:
-                    imap.move_message(client, uid, dest, email_id=email_id)
+                imap.execute_action(client, action, uid, email_id=email_id)
                 executed.append((action, False))
-                if action_type in TERMINAL_ACTIONS:
-                    break
             except Exception as e:
                 logger.error(
                     "Failed to execute action %s on pending email UID %s: %s",
@@ -264,8 +254,8 @@ def reprocess_pending_emails(client, current_uids):
                 )
                 executed.append((action, True))
                 all_ok = False
-                if action_type in TERMINAL_ACTIONS:
-                    break
+            if action_type in TERMINAL_ACTIONS:
+                break
 
         notes_parts = [build_notes_opener(matched_rule, spam_score, config.DRYRUN)]
         if executed:
@@ -399,56 +389,13 @@ def process_email(client, uid, message):
 
         if matched_rule:
             learn_type = matched_rule["learn"]
-            rule_actions = matched_rule["actions"]
-            non_terminal = [a for a in rule_actions if a["type"] not in TERMINAL_ACTIONS]
-            terminal = [a for a in rule_actions if a["type"] in TERMINAL_ACTIONS]
-            for action in non_terminal + terminal:
-                action_type = action["type"]
-                if action_type == "move":
-                    actions.append({"type": "move", "destination": action["destination"]})
-                elif action_type == "delete":
-                    if config.IMAP_TRASH_FOLDER:
-                        actions.append({"type": "delete", "destination": config.IMAP_TRASH_FOLDER})
-                    else:
-                        logger.error(
-                            "Cannot execute 'delete' action for UID %s: trash folder not configured. Set it in the Config page.",
-                            uid, extra={"email_id": email_id}
-                        )
-                elif action_type == "spam":
-                    if config.IMAP_SPAM_FOLDER:
-                        actions.append({"type": "spam", "destination": config.IMAP_SPAM_FOLDER})
-                    else:
-                        logger.error(
-                            "Cannot execute 'spam' action for UID %s: spam folder not configured. Set it in the Config page.",
-                            uid, extra={"email_id": email_id}
-                        )
-                elif action_type == "mark_read":
-                    actions.append({"type": "mark_read"})
-                elif action_type == "mark_unread":
-                    actions.append({"type": "mark_unread"})
-                elif action_type == "flag":
-                    actions.append({"type": "flag"})
-                elif action_type == "unflag":
-                    actions.append({"type": "unflag"})
+            actions = _resolve_rule_actions(matched_rule["actions"], uid, email_id)
 
         elif spam_result["is_spam"]:
             learn_type = "spam"
-            if config.SPAM_ACTION == "delete":
-                if config.IMAP_TRASH_FOLDER:
-                    actions.append({"type": "delete", "destination": config.IMAP_TRASH_FOLDER})
-                else:
-                    logger.error(
-                        "Cannot move spam email UID %s to trash: trash folder not configured. Set it in the Config page.",
-                        uid, extra={"email_id": email_id}
-                    )
-            else:
-                if config.IMAP_SPAM_FOLDER:
-                    actions.append({"type": "spam", "destination": config.IMAP_SPAM_FOLDER})
-                else:
-                    logger.error(
-                        "Cannot move spam email UID %s to spam folder: not configured. Set it in the Config page.",
-                        uid, extra={"email_id": email_id}
-                    )
+            spam_action = _resolve_spam_action(uid, email_id)
+            if spam_action:
+                actions.append(spam_action)
 
         elif spam_result["score"] <= config.HAM_THRESHOLD:
             learn_type = "ham"
@@ -466,22 +413,13 @@ def process_email(client, uid, message):
 
         for action in actions:
             action_type = action["type"]
-            dest = action.get("destination")
             logger.debug(
                 "Executing action %s (destination=%s) for UID %s",
-                action_type, dest or "none", uid,
+                action_type, action.get("destination") or "none", uid,
                 extra={"email_id": email_id}
             )
-            if action_type == "mark_read":
-                imap.mark_read(client, uid, email_id=email_id)
-            elif action_type == "mark_unread":
-                imap.mark_unread(client, uid, email_id=email_id)
-            elif action_type == "flag":
-                imap.flag_message(client, uid, email_id=email_id)
-            elif action_type == "unflag":
-                imap.unflag_message(client, uid, email_id=email_id)
-            elif action_type in TERMINAL_ACTIONS:
-                imap.move_message(client, uid, dest, email_id=email_id)
+            imap.execute_action(client, action, uid, email_id=email_id)
+            if action_type in TERMINAL_ACTIONS:
                 break
 
         will_learn = spam.should_learn(learn_type)

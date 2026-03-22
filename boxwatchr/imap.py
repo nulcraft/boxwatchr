@@ -289,3 +289,19 @@ def move_message(client, uid, destination, email_id=None):
     except Exception as e:
         logger.error("Failed to move UID %s to %s: %s", uid, destination, e, extra={"email_id": email_id})
         raise
+
+def execute_action(client, action, uid, email_id=None):
+    action_type = action["type"]
+    dest = action.get("destination")
+    if action_type == "mark_read":
+        mark_read(client, uid, email_id=email_id)
+    elif action_type == "mark_unread":
+        mark_unread(client, uid, email_id=email_id)
+    elif action_type == "flag":
+        flag_message(client, uid, email_id=email_id)
+    elif action_type == "unflag":
+        unflag_message(client, uid, email_id=email_id)
+    elif action_type in {"move", "delete", "spam"}:
+        move_message(client, uid, dest, email_id=email_id)
+    else:
+        logger.warning("Unknown action type %r for UID %s", action_type, uid, extra={"email_id": email_id})

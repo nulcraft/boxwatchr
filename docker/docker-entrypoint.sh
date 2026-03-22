@@ -33,7 +33,7 @@ if ! getent passwd "$PUID" > /dev/null 2>&1; then
     useradd -u "$PUID" -g "$PGID" -M -s /usr/sbin/nologin boxwatchr 2>/dev/null
 fi
 
-chown -R "$PUID:$PGID" /app/data
+chown -R "$PUID:$PGID" /app/data /app/config
 
 if [ -z "$RSPAMD_PASSWORD" ]; then
     RSPAMD_PASSWORD=$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
