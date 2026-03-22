@@ -105,13 +105,10 @@ def test_imap():
         try:
             client.login(username, password)
             folders = sorted(f[2] for f in client.list_folders())
-            detected_trash, detected_spam = imap.detect_special_folders(client)
             client.logout()
             return {
                 "success": True,
                 "folders": folders,
-                "trash_folder": detected_trash or "",
-                "spam_folder": detected_spam or "",
             }
         except LoginError as e:
             try:

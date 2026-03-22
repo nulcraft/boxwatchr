@@ -224,3 +224,6 @@ data/tldextract/
 
 # Any backup files
 *.bak
+
+# Any .key file in the project
+*.key

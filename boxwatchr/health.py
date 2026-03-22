@@ -224,35 +224,6 @@ def start_imap(loaded_rules):
         fatal_shutdown()
 
     try:
-        if not config.IMAP_TRASH_FOLDER or not config.IMAP_SPAM_FOLDER:
-            logger.debug(
-                "Auto-detecting special IMAP folders (trash=%r, spam=%r configured so far)",
-                config.IMAP_TRASH_FOLDER, config.IMAP_SPAM_FOLDER
-            )
-            detected_trash, detected_spam = _imap.detect_special_folders(client)
-
-            if not config.IMAP_TRASH_FOLDER:
-                if detected_trash:
-                    config.IMAP_TRASH_FOLDER = detected_trash
-                    logger.info("Trash folder auto-detected: %s", config.IMAP_TRASH_FOLDER)
-                else:
-                    logger.warning(
-                        "Trash folder not configured and could not be auto-detected. "
-                        "Actions that require the trash folder will be skipped. "
-                        "Set it manually in the Config page."
-                    )
-
-            if not config.IMAP_SPAM_FOLDER:
-                if detected_spam:
-                    config.IMAP_SPAM_FOLDER = detected_spam
-                    logger.info("Spam folder auto-detected: %s", config.IMAP_SPAM_FOLDER)
-                else:
-                    logger.warning(
-                        "Spam folder not configured and could not be auto-detected. "
-                        "Actions that require the spam folder will be skipped. "
-                        "Set it manually in the Config page."
-                    )
-
         try:
             folder_names = _imap.list_folder_names(client)
         except Exception as e:
@@ -271,26 +242,6 @@ def start_imap(loaded_rules):
             fatal_shutdown()
 
         logger.debug("Watched folder %r verified on server", config.IMAP_FOLDER)
-
-        if config.IMAP_TRASH_FOLDER and config.IMAP_TRASH_FOLDER not in folder_set:
-            logger.error(
-                "Fatal: Trash folder %r does not exist on the server. We found these folders:\n%s\n\nShutting down.",
-                config.IMAP_TRASH_FOLDER, folder_list
-            )
-            fatal_shutdown()
-
-        if config.IMAP_TRASH_FOLDER:
-            logger.debug("Trash folder %r verified on server", config.IMAP_TRASH_FOLDER)
-
-        if config.IMAP_SPAM_FOLDER and config.IMAP_SPAM_FOLDER not in folder_set:
-            logger.error(
-                "Fatal: Spam folder %r does not exist on the server. We found these folders:\n%s\n\nShutting down.",
-                config.IMAP_SPAM_FOLDER, folder_list
-            )
-            fatal_shutdown()
-
-        if config.IMAP_SPAM_FOLDER:
-            logger.debug("Spam folder %r verified on server", config.IMAP_SPAM_FOLDER)
 
         destinations = {
             action["destination"]

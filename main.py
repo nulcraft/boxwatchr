@@ -10,7 +10,7 @@ from boxwatchr.web.app import start_dashboard
 from boxwatchr.imap import FatalImapError
 from boxwatchr.notes import action_sentence, failed_action_sentence, skipped_learn_sentence, build_notes_opener
 from boxwatchr.database import set_processing, clear_email_id_from_logs, enqueue_email, enqueue_email_update, get_known_uids, get_unprocessed_emails, get_email_by_message_id, update_email_uid
-from boxwatchr.rules import watch_rules, TERMINAL_ACTIONS, resolve_actions
+from boxwatchr.rules import watch_rules, TERMINAL_ACTIONS
 from boxwatchr.logger import get_logger
 
 logger = get_logger("boxwatchr.main")
@@ -45,8 +45,6 @@ def _print_startup_checks(loaded_rules):
     print("RSPAMD password configured", flush=True)
     print("IMAP server: %s:%s" % (config.IMAP_HOST, config.IMAP_PORT), flush=True)
     print("Monitoring folder: %s" % config.IMAP_FOLDER, flush=True)
-    print("Trash folder: %s" % config.IMAP_TRASH_FOLDER, flush=True)
-    print("Spam folder: %s" % config.IMAP_SPAM_FOLDER, flush=True)
     print("Dry run: %s" % ("enabled" if config.DRYRUN else "disabled"), flush=True)
     print("Rules loaded: %d" % len(loaded_rules), flush=True)
     print(flush=True)
@@ -56,16 +54,6 @@ def _fatal_exit(message):
     logger.error("Shutting down.")
     health.fatal_shutdown()
 
-def _resolve_rule_actions(rule_actions, uid, email_id):
-    actions, missing = resolve_actions(rule_actions)
-    for action_type in missing:
-        folder = "trash" if action_type == "delete" else "spam"
-        logger.error(
-            "Cannot execute '%s' action for UID %s: %s folder not configured. Set it in the Config page.",
-            action_type, uid, folder,
-            extra={"email_id": email_id}
-        )
-    return actions
 
 def _decode(value):
     if isinstance(value, bytes):
@@ -184,7 +172,9 @@ def reprocess_pending_emails(client, current_uids):
 
         actions = []
         if matched_rule:
-            actions = _resolve_rule_actions(matched_rule["actions"], uid, email_id)
+            rule_actions = matched_rule["actions"]
+            actions = [a for a in rule_actions if a["type"] not in TERMINAL_ACTIONS] + \
+                      [a for a in rule_actions if a["type"] in TERMINAL_ACTIONS]
 
         logger.debug(
             "Pending email UID %s: %s action(s) to execute: %s",
@@ -352,7 +342,9 @@ def process_email(client, uid, message):
 
         actions = []
         if matched_rule:
-            actions = _resolve_rule_actions(matched_rule["actions"], uid, email_id)
+            rule_actions = matched_rule["actions"]
+            actions = [a for a in rule_actions if a["type"] not in TERMINAL_ACTIONS] + \
+                      [a for a in rule_actions if a["type"] in TERMINAL_ACTIONS]
 
         logger.debug(
             "Email UID %s: spam_score=%.2f, rule=%s, %s action(s): %s",

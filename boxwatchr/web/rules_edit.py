@@ -5,7 +5,7 @@ from flask import render_template, request, redirect, url_for, abort
 from boxwatchr import config, imap, spam
 from boxwatchr.database import get_connection, enqueue_email_update
 from boxwatchr.notes import action_sentence
-from boxwatchr.rules import validate_rule, check_rule, TERMINAL_ACTIONS, resolve_actions
+from boxwatchr.rules import validate_rule, check_rule, TERMINAL_ACTIONS
 from boxwatchr.web.app import app, _require_auth, _require_csrf, _check_csrf, logger
 from boxwatchr.web.rules import _FIELD_LABELS, _ACTION_LABELS, _read_rules_raw, _write_rules_raw
 
@@ -151,13 +151,9 @@ def rule_run(index):
 
     logger.debug("Rule run: evaluating %s email(s) against rule '%s'", len(rows), rule["name"])
 
-    resolved_actions, missing = resolve_actions(rule["actions"])
-    if missing:
-        for m in missing:
-            folder = "trash" if m == "delete" else "spam"
-            msg = "%s folder not configured — set it in the Config page" % folder
-            logger.error("Rule run: cannot execute rule '%s': %s", rule["name"], msg)
-            return redirect(url_for("rules_list", run_result="Rule '%s' failed: %s" % (rule["name"], msg)))
+    rule_actions = rule["actions"]
+    resolved_actions = [a for a in rule_actions if a["type"] not in TERMINAL_ACTIONS] + \
+                       [a for a in rule_actions if a["type"] in TERMINAL_ACTIONS]
 
     needs_rfc822 = any(a["type"] in {"learn_spam", "learn_ham"} for a in resolved_actions)
 

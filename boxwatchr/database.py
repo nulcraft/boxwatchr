@@ -68,7 +68,6 @@ def _create_schema(conn):
             processed INTEGER NOT NULL DEFAULT 0,
             processed_at TEXT NOT NULL,
             processed_notes TEXT,
-            user_action TEXT,
             message_id TEXT,
             rspamd_learned TEXT,
             UNIQUE(uid, folder)
@@ -260,8 +259,8 @@ def _flush():
                 INSERT INTO emails (
                     id, uid, folder, sender, recipients, subject, date_received, message_size,
                     spam_score, rule_matched, actions, history, raw_headers, attachments,
-                    processed, processed_at, processed_notes, user_action, message_id, rspamd_learned
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    processed, processed_at, processed_notes, message_id, rspamd_learned
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(uid, folder) DO UPDATE SET
                     sender = excluded.sender,
                     recipients = excluded.recipients,
@@ -275,7 +274,7 @@ def _flush():
                 item["spam_score"], item["rule_matched"], item["actions"], item["history"],
                 item["raw_headers"], item["attachments"],
                 item["processed"], item["processed_at"], item["processed_notes"],
-                item["user_action"], item["message_id"], item["rspamd_learned"]
+                item["message_id"], item["rspamd_learned"]
             ))
 
         for item in updates_batch:
@@ -393,40 +392,10 @@ def update_email_uid(email_id, uid):
         logger.error("Failed to update UID for email %s: %s", email_id, e)
         raise
 
-def set_user_action(email_id, user_action, rspamd_learned=None):
-    try:
-        conn = get_connection()
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            row = conn.execute("SELECT history FROM emails WHERE id = ?", (email_id,)).fetchone()
-            current_history = json.loads(row["history"] or "[]") if row else []
-            entry = {
-                "at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
-                "by": "user",
-                "action": user_action,
-            }
-            new_history = json.dumps(current_history + [entry])
-            if rspamd_learned is not None:
-                conn.execute(
-                    "UPDATE emails SET user_action = ?, history = ?, rspamd_learned = ? WHERE id = ?",
-                    (user_action, new_history, rspamd_learned, email_id)
-                )
-            else:
-                conn.execute(
-                    "UPDATE emails SET user_action = ?, history = ? WHERE id = ?",
-                    (user_action, new_history, email_id)
-                )
-            conn.commit()
-            logger.debug("Set user_action=%s for email %s", user_action, email_id)
-        finally:
-            conn.close()
-    except sqlite3.Error as e:
-        logger.error("Failed to set user_action for email %s: %s", email_id, e)
-        raise
 
 def enqueue_email(uid, folder, sender, recipients, subject, date_received, message_size,
                   spam_score, rule_matched, actions, raw_headers, attachments, processed,
-                  processed_at, processed_notes, email_id=None, user_action=None, history=None,
+                  processed_at, processed_notes, email_id=None, history=None,
                   message_id=None, rspamd_learned=None):
     with _queue_lock:
         _email_queue.append({
@@ -447,7 +416,6 @@ def enqueue_email(uid, folder, sender, recipients, subject, date_received, messa
             "processed": processed,
             "processed_at": processed_at,
             "processed_notes": processed_notes,
-            "user_action": user_action,
             "message_id": message_id,
             "rspamd_learned": rspamd_learned,
         })

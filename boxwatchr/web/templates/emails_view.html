@@ -75,47 +75,8 @@
                     <td>{{ email.rule.name }}</td>
                 </tr>
                 {% endif %}
-                {% if email.user_action %}
-                <tr>
-                    <td class="detail-label">User Override</td>
-                    <td>
-                        {% if email.user_action == "ham" %}
-                        <span class="badge text-bg-success">Not Spam</span>
-                        {% elif email.user_action == "spam" %}
-                        <span class="badge text-bg-danger">Confirmed Spam</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endif %}
             </tbody>
         </table>
-    </div>
-</div>
-
-<div class="card mb-4">
-    <div class="card-body">
-        <h2 class="card-subtitle">Manual Review</h2>
-        <div class="d-flex gap-2 flex-wrap action-forms">
-            {% if email.spammed or email.user_action == "spam" %}
-            <form method="post" action="/emails/{{ email.id }}/not-spam">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-success">Not Spam, Report as Ham</button>
-            </form>
-            {% else %}
-            <form method="post" action="/emails/{{ email.id }}/is-spam">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-danger">Not Ham, Report as Spam</button>
-            </form>
-            {% endif %}
-        </div>
-        {% if email.user_action %}
-        <p class="text-secondary small mt-2 mb-0">
-            Current override:
-            {% if email.user_action == "ham" %}reported as ham
-            {% elif email.user_action == "spam" %}reported as spam
-            {% endif %}
-        </p>
-        {% endif %}
     </div>
 </div>
 
@@ -137,15 +98,11 @@
                     <td class="text-nowrap small">{{ entry.at | localtime }}</td>
                     <td>{{ "User" if entry.by == "user" else "boxwatchr" }}</td>
                     <td>
-                        {% if entry.action == "spam" %}Moved to spam{% if entry.destination %} ({{ entry.destination }}){% endif %}
-                        {% elif entry.action == "move" %}Moved to {{ entry.destination or "?" }}
-                        {% elif entry.action == "delete" %}Moved to trash{% if entry.destination %} ({{ entry.destination }}){% endif %}
+                        {% if entry.action == "move" %}Moved to {{ entry.destination or "?" }}
                         {% elif entry.action == "mark_read" %}Marked as read
                         {% elif entry.action == "mark_unread" %}Marked as unread
                         {% elif entry.action == "flag" %}Flagged
                         {% elif entry.action == "unflag" %}Removed flag
-                        {% elif entry.action == "ham" %}Reported as ham
-                        {% elif entry.action == "spam" %}Reported as spam
                         {% else %}{{ entry.action }}{% endif %}
                     </td>
                 </tr>

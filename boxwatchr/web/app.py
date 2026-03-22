@@ -10,6 +10,7 @@ import json
 from datetime import datetime, timezone
 from flask import Flask, abort, redirect, request, session, url_for
 from boxwatchr import config
+from boxwatchr.crypto import decrypt_password, encrypt_password
 from boxwatchr.database import get_config, set_config, bulk_set_config
 from boxwatchr.logger import get_logger
 
@@ -100,8 +101,6 @@ def _require_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-def _is_spammed(actions, user_action):
-    return any(a.get("type") == "spam" for a in actions) and user_action != "ham"
 
 def _score_class(score):
     if score is None:
@@ -118,18 +117,17 @@ def _save_app_config(form):
     username = form.get("imap_username", "").strip()
     new_password = form.get("imap_password", "")
     folder = form.get("imap_folder", "").strip()
-    trash_folder = form.get("imap_trash_folder", "").strip() or None
-    spam_folder = form.get("imap_spam_folder", "").strip() or None
     tls_mode = form.get("tls_mode", "ssl").strip()
     if tls_mode not in _TLS_MODES:
         tls_mode = "ssl"
 
+    existing_encrypted = ""
     if not new_password:
         try:
             saved = json.loads(get_config("imap_accounts", "[]"))
-            new_password = (saved[0].get("password", "") if saved else "")
+            existing_encrypted = (saved[0].get("password", "") if saved else "")
         except (json.JSONDecodeError, IndexError, KeyError):
-            new_password = ""
+            existing_encrypted = ""
 
     try:
         port_int = int(port)
@@ -141,10 +139,8 @@ def _save_app_config(form):
         "host": host,
         "port": port_int,
         "username": username,
-        "password": new_password,
+        "password": encrypt_password(new_password) if new_password else existing_encrypted,
         "folder": folder,
-        "trash_folder": trash_folder,
-        "spam_folder": spam_folder,
         "poll_interval": 60,
         "tls_mode": tls_mode,
     }

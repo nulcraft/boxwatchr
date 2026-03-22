@@ -63,34 +63,6 @@
                     </select>
                     {% if not folders %}<div class="form-text">Test credentials to load the folder list from the server.</div>{% endif %}
                 </div>
-                <div class="col-12 col-md-6">
-                    <label class="form-label">Trash Folder</label>
-                    <select name="imap_trash_folder" id="imap_trash_folder" class="form-select">
-                        {% set current_trash = account.get('trash_folder', '') %}
-                        <option value=""{% if not current_trash %} selected{% endif %}>Auto-detect</option>
-                        {% if folders %}
-                            {% for f in folders %}
-                            <option value="{{ f }}"{% if f == current_trash %} selected{% endif %}>{{ f }}</option>
-                            {% endfor %}
-                        {% elif current_trash %}
-                            <option value="{{ current_trash }}" selected>{{ current_trash }}</option>
-                        {% endif %}
-                    </select>
-                </div>
-                <div class="col-12 col-md-6">
-                    <label class="form-label">Spam Folder</label>
-                    <select name="imap_spam_folder" id="imap_spam_folder" class="form-select">
-                        {% set current_spam = account.get('spam_folder', '') %}
-                        <option value=""{% if not current_spam %} selected{% endif %}>Auto-detect</option>
-                        {% if folders %}
-                            {% for f in folders %}
-                            <option value="{{ f }}"{% if f == current_spam %} selected{% endif %}>{{ f }}</option>
-                            {% endfor %}
-                        {% elif current_spam %}
-                            <option value="{{ current_spam }}" selected>{{ current_spam }}</option>
-                        {% endif %}
-                    </select>
-                </div>
             </div>
         </div>
     </div>

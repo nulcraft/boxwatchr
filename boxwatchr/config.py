@@ -21,8 +21,6 @@ IMAP_USERNAME = ""
 IMAP_PASSWORD = ""
 IMAP_FOLDER = "INBOX"
 IMAP_POLL_INTERVAL = 60
-IMAP_TRASH_FOLDER = None
-IMAP_SPAM_FOLDER = None
 IMAP_TLS_MODE = "ssl"
 
 LOG_LEVEL = "INFO"
@@ -33,9 +31,10 @@ DB_PRUNE_DAYS = 0
 def load():
     """Load app settings from the config table. Call after database.initialize()."""
     from boxwatchr.database import get_config
+    from boxwatchr.crypto import decrypt_password
     global SETUP_COMPLETE
     global IMAP_ACCOUNTS, IMAP_HOST, IMAP_PORT, IMAP_USERNAME, IMAP_PASSWORD
-    global IMAP_FOLDER, IMAP_POLL_INTERVAL, IMAP_TRASH_FOLDER, IMAP_SPAM_FOLDER, IMAP_TLS_MODE
+    global IMAP_FOLDER, IMAP_POLL_INTERVAL, IMAP_TLS_MODE
     global LOG_LEVEL, DRYRUN, WEB_PASSWORD, DB_PRUNE_DAYS
 
     SETUP_COMPLETE = get_config("setup_complete", "false") == "true"
@@ -50,11 +49,9 @@ def load():
         IMAP_HOST = acc.get("host", "")
         IMAP_PORT = int(acc.get("port", 993))
         IMAP_USERNAME = acc.get("username", "")
-        IMAP_PASSWORD = acc.get("password", "")
+        IMAP_PASSWORD = decrypt_password(acc.get("password", ""))
         IMAP_FOLDER = acc.get("folder", "INBOX")
         IMAP_POLL_INTERVAL = int(acc.get("poll_interval", 60))
-        IMAP_TRASH_FOLDER = acc.get("trash_folder") or None
-        IMAP_SPAM_FOLDER = acc.get("spam_folder") or None
         IMAP_TLS_MODE = acc.get("tls_mode", "ssl")
 
     LOG_LEVEL = get_config("log_level", LOG_LEVEL).upper()

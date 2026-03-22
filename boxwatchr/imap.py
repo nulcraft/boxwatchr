@@ -107,27 +107,6 @@ def list_folder_names(client):
         logger.error("Failed to list IMAP folders: %s", e)
         raise
 
-def detect_special_folders(client):
-    logger.debug("Detecting special-use folders (\\Trash, \\Junk, \\Spam)")
-    try:
-        folders = client.list_folders()
-    except Exception as e:
-        logger.warning("Could not list folders for special-use detection: %s", e)
-        return None, None
-
-    trash = None
-    spam = None
-    for flags, _delimiter, name in folders:
-        flag_set = {f.decode() if isinstance(f, bytes) else f for f in flags}
-        if "\\Trash" in flag_set and trash is None:
-            trash = name
-            logger.debug("Found \\Trash folder: %s", name)
-        if ("\\Junk" in flag_set or "\\Spam" in flag_set) and spam is None:
-            spam = name
-            logger.debug("Found \\Junk/\\Spam folder: %s", name)
-
-    logger.debug("Special folder detection complete: trash=%r, spam=%r", trash, spam)
-    return trash, spam
 
 def get_existing_uids(client):
     logger.debug("Fetching existing UIDs in %s", config.IMAP_FOLDER)

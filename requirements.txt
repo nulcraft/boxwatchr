@@ -21,6 +21,9 @@ charset-normalizer==3.4.6   # HTTP charset detection (requests dependency)
 idna==3.11                  # Internationalized domain names (requests dependency)
 urllib3==2.6.3              # HTTP connection pooling (requests dependency)
 
+# cryptography
+cryptography==46.0.5         # Fernet symmetric encryption for stored IMAP passwords
+
 # tldextract and its dependencies
 tldextract==5.3.1           # Extract domain/TLD from email addresses
 filelock==3.25.2            # File locking (tldextract dependency)

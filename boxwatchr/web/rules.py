@@ -27,8 +27,6 @@ _FIELD_LABELS = {
 
 _ACTION_LABELS = {
     "move": "Move to folder",
-    "delete": "Delete (move to trash)",
-    "spam": "Mark as spam",
     "mark_read": "Mark as read",
     "mark_unread": "Mark as unread",
     "flag": "Flag message",

@@ -2,18 +2,9 @@
     var testBtn = document.getElementById("test-btn");
     var statusEl = document.getElementById("test-status");
     var folderSel = document.getElementById("imap_folder");
-    var trashSel = document.getElementById("imap_trash_folder");
-    var spamSel = document.getElementById("imap_spam_folder");
 
-    function populateSelect(sel, folders, currentVal, addAuto) {
+    function populateSelect(sel, folders, currentVal) {
         sel.innerHTML = "";
-        if (addAuto) {
-            var opt = document.createElement("option");
-            opt.value = "";
-            opt.textContent = "Auto-detect";
-            if (!currentVal) opt.selected = true;
-            sel.appendChild(opt);
-        }
         folders.forEach(function (f) {
             var opt = document.createElement("option");
             opt.value = f;
@@ -29,8 +20,6 @@
         testBtn.disabled = true;
 
         var currentFolder = folderSel.options[folderSel.selectedIndex] ? folderSel.options[folderSel.selectedIndex].value : "";
-        var currentTrash = trashSel.options[trashSel.selectedIndex] ? trashSel.options[trashSel.selectedIndex].value : "";
-        var currentSpam = spamSel.options[spamSel.selectedIndex] ? spamSel.options[spamSel.selectedIndex].value : "";
         var csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 
         fetch("/api/test-imap", {
@@ -48,9 +37,7 @@
         .then(function (data) {
             testBtn.disabled = false;
             if (data.success) {
-                populateSelect(folderSel, data.folders, currentFolder, false);
-                populateSelect(trashSel, data.folders, currentTrash, true);
-                populateSelect(spamSel, data.folders, currentSpam, true);
+                populateSelect(folderSel, data.folders, currentFolder);
                 statusEl.textContent = "Connected. Folder list updated.";
                 statusEl.className = "small ms-2 text-success";
             } else {

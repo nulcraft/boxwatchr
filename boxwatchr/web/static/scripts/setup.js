@@ -3,18 +3,9 @@
     var saveBtn = document.getElementById("save-btn");
     var statusEl = document.getElementById("test-status");
     var folderSel = document.getElementById("imap_folder");
-    var trashSel = document.getElementById("imap_trash_folder");
-    var spamSel = document.getElementById("imap_spam_folder");
 
-    function populateSelect(sel, folders, addAuto, selectedVal) {
+    function populateSelect(sel, folders, selectedVal) {
         sel.innerHTML = "";
-        if (addAuto) {
-            var opt = document.createElement("option");
-            opt.value = "";
-            opt.textContent = "Auto-detect";
-            if (!selectedVal) opt.selected = true;
-            sel.appendChild(opt);
-        }
         folders.forEach(function (f) {
             var opt = document.createElement("option");
             opt.value = f;
@@ -45,9 +36,7 @@
         .then(function (data) {
             testBtn.disabled = false;
             if (data.success) {
-                populateSelect(folderSel, data.folders, false, "");
-                populateSelect(trashSel, data.folders, true, data.trash_folder || "");
-                populateSelect(spamSel, data.folders, true, data.spam_folder || "");
+                populateSelect(folderSel, data.folders, "");
                 saveBtn.disabled = false;
                 statusEl.textContent = "Connected. Select your watch folder below.";
                 statusEl.className = "small ms-2 text-success";
