@@ -27,10 +27,6 @@ IMAP_TLS_MODE = "ssl"
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 DRYRUN = False
-SPAM_THRESHOLD = 6.0
-SPAM_ACTION = "spam"
-SPAM_LEARNING = "both"
-HAM_THRESHOLD = 2.0
 WEB_PASSWORD = ""
 DB_PRUNE_DAYS = 0
 
@@ -40,8 +36,7 @@ def load():
     global SETUP_COMPLETE
     global IMAP_ACCOUNTS, IMAP_HOST, IMAP_PORT, IMAP_USERNAME, IMAP_PASSWORD
     global IMAP_FOLDER, IMAP_POLL_INTERVAL, IMAP_TRASH_FOLDER, IMAP_SPAM_FOLDER, IMAP_TLS_MODE
-    global LOG_LEVEL, DRYRUN, SPAM_THRESHOLD, SPAM_ACTION, SPAM_LEARNING
-    global HAM_THRESHOLD, WEB_PASSWORD, DB_PRUNE_DAYS
+    global LOG_LEVEL, DRYRUN, WEB_PASSWORD, DB_PRUNE_DAYS
 
     SETUP_COMPLETE = get_config("setup_complete", "false") == "true"
 
@@ -64,10 +59,6 @@ def load():
 
     LOG_LEVEL = get_config("log_level", LOG_LEVEL).upper()
     DRYRUN = get_config("dry_run", "false") == "true"
-    SPAM_THRESHOLD = float(get_config("spam_threshold", "6.0"))
-    SPAM_ACTION = get_config("spam_action", "spam")
-    SPAM_LEARNING = get_config("spam_learning", "both")
-    HAM_THRESHOLD = float(get_config("ham_threshold", "2.0"))
     WEB_PASSWORD = get_config("web_password", "")
     DB_PRUNE_DAYS = int(get_config("db_prune_days", "0"))
 

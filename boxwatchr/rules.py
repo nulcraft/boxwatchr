@@ -17,6 +17,9 @@ _rules_lock = threading.Lock()
 
 TERMINAL_ACTIONS = {"move", "delete", "spam"}
 
+_TEXT_OPERATORS = {"equals", "contains", "is_empty"}
+_NUMERIC_OPERATORS = {"greater_than", "less_than", "greater_than_or_equal", "less_than_or_equal"}
+
 def load_rules(path):
     global _rules
 
@@ -61,15 +64,6 @@ def validate_rule(rule):
         logger.warning("Rule '%s' has no actions and will be skipped", name)
         return None
 
-    if "learn" not in rule:
-        logger.warning("Rule '%s' is missing the required 'learn' field and will be skipped", name)
-        return None
-
-    learn = rule["learn"].lower().strip()
-    if learn not in ("spam", "ham"):
-        logger.warning("Rule '%s' has invalid learn value '%s'. Must be 'spam' or 'ham' and will be skipped", name, learn)
-        return None
-
     match = rule.get("match", "all").lower().strip()
     if match not in ("all", "any"):
         logger.warning("Rule '%s' has invalid match value '%s', defaulting to 'all'", name, match)
@@ -82,11 +76,11 @@ def validate_rule(rule):
         "recipient_domain_root", "recipient_domain_tld",
         "subject", "raw_headers",
         "attachment_name", "attachment_extension", "attachment_content_type",
+        "rspamd_score",
     }
 
-    valid_operators = {"equals", "contains", "is_empty"}
-    valid_actions = {"move", "delete", "spam", "mark_read", "mark_unread", "flag", "unflag"}
-    contradictory_pairs = [{"mark_read", "mark_unread"}, {"flag", "unflag"}]
+    valid_actions = {"move", "delete", "spam", "mark_read", "mark_unread", "flag", "unflag", "learn_spam", "learn_ham"}
+    contradictory_pairs = [{"mark_read", "mark_unread"}, {"flag", "unflag"}, {"learn_spam", "learn_ham"}]
 
     validated_conditions = []
     for i, condition in enumerate(rule["conditions"]):
@@ -102,21 +96,43 @@ def validate_rule(rule):
             logger.warning("Rule '%s' condition %s is missing an operator and will be skipped", name, i + 1)
             return None
 
-        if value == "" or value is None:
-            logger.warning("Rule '%s' condition %s is missing a value and will be skipped", name, i + 1)
-            return None
-
         if field not in valid_fields:
             logger.warning("Rule '%s' condition %s has unknown field '%s' and will be skipped", name, i + 1, field)
             return None
 
-        if operator not in valid_operators:
-            logger.warning("Rule '%s' condition %s has unknown operator '%s' and will be skipped", name, i + 1, operator)
-            return None
+        if field == "rspamd_score":
+            if operator not in _NUMERIC_OPERATORS:
+                logger.warning(
+                    "Rule '%s' condition %s: rspamd_score requires a numeric operator (got '%s') and will be skipped",
+                    name, i + 1, operator
+                )
+                return None
+            try:
+                float(value)
+            except (ValueError, TypeError):
+                logger.warning(
+                    "Rule '%s' condition %s: rspamd_score value must be a number (got %r) and will be skipped",
+                    name, i + 1, value
+                )
+                return None
+        else:
+            if operator not in _TEXT_OPERATORS:
+                logger.warning(
+                    "Rule '%s' condition %s has unknown operator '%s' and will be skipped",
+                    name, i + 1, operator
+                )
+                return None
 
-        if operator == "is_empty" and str(value).lower() not in ("true", "false"):
-            logger.warning("Rule '%s' condition %s uses is_empty but value must be true or false and will be skipped", name, i + 1)
-            return None
+            if value == "" or value is None:
+                logger.warning("Rule '%s' condition %s is missing a value and will be skipped", name, i + 1)
+                return None
+
+            if operator == "is_empty" and str(value).lower() not in ("true", "false"):
+                logger.warning(
+                    "Rule '%s' condition %s uses is_empty but value must be true or false and will be skipped",
+                    name, i + 1
+                )
+                return None
 
         validated_conditions.append({
             "field": field,
@@ -178,7 +194,6 @@ def validate_rule(rule):
     return {
         "name": name,
         "match": match,
-        "learn": learn,
         "conditions": validated_conditions,
         "actions": validated_actions
     }
@@ -207,7 +222,7 @@ def _extract_fields(email):
         extracted = _tldextract(domain)
         domain_root = extracted.domain
         tld = extracted.suffix
-        domain_name = f"{extracted.subdomain}.{extracted.domain}" if extracted.subdomain else extracted.domain
+        domain_name = "%s.%s" % (extracted.subdomain, extracted.domain) if extracted.subdomain else extracted.domain
 
         return {
             "full": address,
@@ -251,7 +266,38 @@ def _extract_fields(email):
 def _match_condition(condition, fields, rule_name):
     field = condition["field"]
     operator = condition["operator"]
-    value = condition["value"].lower()
+    value = condition["value"]
+
+    if field == "rspamd_score":
+        score = fields.get("rspamd_score")
+        if score is None:
+            logger.debug(
+                "Rule '%s': rspamd_score condition skipped, score not available",
+                rule_name
+            )
+            return False
+        try:
+            threshold = float(value)
+            score_float = float(score)
+        except (ValueError, TypeError):
+            return False
+        if operator == "greater_than":
+            result = score_float > threshold
+        elif operator == "less_than":
+            result = score_float < threshold
+        elif operator == "greater_than_or_equal":
+            result = score_float >= threshold
+        elif operator == "less_than_or_equal":
+            result = score_float <= threshold
+        else:
+            result = False
+        logger.debug(
+            "Rule '%s': condition field=rspamd_score operator=%s value=%s score=%.2f => %s",
+            rule_name, operator, threshold, score_float, result
+        )
+        return result
+
+    value = value.lower()
 
     if field.startswith("recipient"):
         recipient_key = {
@@ -342,8 +388,9 @@ def _apply_operator(operator, field_value, value, field_name, rule_name):
     logger.warning("Unknown operator %r in rule '%s' field %s — condition will not match", operator, rule_name, field_name)
     return False
 
-def check_rule(rule, email_data):
+def check_rule(rule, email_data, spam_score=None):
     fields = _extract_fields(email_data)
+    fields["rspamd_score"] = spam_score
     conditions = rule["conditions"]
     results = [_match_condition(c, fields, rule["name"]) for c in conditions]
     logger.debug(
@@ -355,8 +402,9 @@ def check_rule(rule, email_data):
         return any(results)
     return all(results)
 
-def evaluate(email):
+def evaluate(email, spam_score=None):
     fields = _extract_fields(email)
+    fields["rspamd_score"] = spam_score
     logger.debug(
         "Evaluating rules for email from %s (subject=%r)",
         fields.get("sender", "unknown"), email.get("subject", "")

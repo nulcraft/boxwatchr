@@ -13,7 +13,7 @@ logger = get_logger("boxwatchr.database")
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "boxwatchr.db")
 
-CURRENT_VERSION = 2
+CURRENT_VERSION = 1
 
 _log_queue = collections.deque()
 _email_queue = collections.deque()
@@ -69,9 +69,12 @@ def _create_schema(conn):
             processed_at TEXT NOT NULL,
             processed_notes TEXT,
             user_action TEXT,
+            message_id TEXT,
+            rspamd_learned TEXT,
             UNIQUE(uid, folder)
         )
     """)
+    conn.execute("CREATE INDEX idx_emails_message_id ON emails (message_id)")
     logger.debug("Emails table created")
 
     conn.execute("""
@@ -97,18 +100,6 @@ def _create_schema(conn):
 
     logger.info("Database schema v1 created")
 
-def _migrate_v1_to_v2(conn):
-    logger.info("Migrating database from v1 to v2 (adding message_id and rspamd_learned columns)")
-    conn.execute("ALTER TABLE emails ADD COLUMN message_id TEXT")
-    conn.execute("ALTER TABLE emails ADD COLUMN rspamd_learned TEXT")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails (message_id)")
-    logger.info("Migration v1 to v2 complete")
-
-_MIGRATIONS = [
-    _create_schema,       # version 0 → 1
-    _migrate_v1_to_v2,    # version 1 → 2
-]
-
 def initialize():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
@@ -132,13 +123,10 @@ def initialize():
             )
             raise RuntimeError("Database version is newer than the application supports")
 
-        for i in range(current_version, CURRENT_VERSION):
-            _MIGRATIONS[i](conn)
-            _set_version(conn, i + 1)
-            conn.commit()
-            logger.info("Database migrated to version %s", i + 1)
-
-        logger.info("Database initialization complete. Version: %s", CURRENT_VERSION)
+        _create_schema(conn)
+        _set_version(conn, CURRENT_VERSION)
+        conn.commit()
+        logger.info("Database initialized at version %s", CURRENT_VERSION)
 
     except sqlite3.Error as e:
         logger.error("Failed to initialize database: %s", e)

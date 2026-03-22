@@ -4,8 +4,8 @@ from boxwatchr.logger import get_logger
 
 logger = get_logger("boxwatchr.spam")
 
-def check(raw_message, email_id=None):
-    url = f"http://{config.RSPAMD_HOST}:{config.RSPAMD_PORT}/checkv2"
+def get_rspamd_score(raw_message, email_id=None):
+    url = "http://%s:%s/checkv2" % (config.RSPAMD_HOST, config.RSPAMD_PORT)
     logger.debug("Submitting message to rspamd at %s", url, extra={"email_id": email_id})
 
     try:
@@ -26,51 +26,26 @@ def check(raw_message, email_id=None):
             return None
 
         result = response.json()
-
         score = result.get("score", 0.0)
-        action = result.get("action", "unknown")
         symbols = result.get("symbols", {})
 
         logger.debug(
-            "rspamd score: %.2f, action: %s, symbols fired: %s",
+            "rspamd score: %.2f, symbols fired: %s",
             score,
-            action,
             len(symbols),
             extra={"email_id": email_id}
         )
 
         if symbols:
             for symbol, details in symbols.items():
-                symbol_score = details.get("score", 0.0)
                 logger.debug(
                     "Symbol: %s (score: %.2f)",
                     symbol,
-                    symbol_score,
+                    details.get("score", 0.0),
                     extra={"email_id": email_id}
                 )
 
-        if score >= config.SPAM_THRESHOLD:
-            logger.debug(
-                "Message score %.2f exceeds threshold %.2f, action: %s",
-                score,
-                config.SPAM_THRESHOLD,
-                config.SPAM_ACTION,
-                extra={"email_id": email_id}
-            )
-        else:
-            logger.debug(
-                "Message score %.2f is below threshold %.2f, no spam action taken",
-                score,
-                config.SPAM_THRESHOLD,
-                extra={"email_id": email_id}
-            )
-
-        return {
-            "score": score,
-            "action": action,
-            "symbols": symbols,
-            "is_spam": score >= config.SPAM_THRESHOLD
-        }
+        return score
 
     except requests.exceptions.Timeout:
         logger.error("rspamd request timed out", extra={"email_id": email_id})
@@ -81,31 +56,8 @@ def check(raw_message, email_id=None):
         return None
 
     except Exception as e:
-        logger.error("Unexpected error during spam check: %s", e, extra={"email_id": email_id})
+        logger.error("Unexpected error during rspamd score check: %s", e, extra={"email_id": email_id})
         return None
-
-def should_learn(learn_type):
-    return (
-        learn_type is not None
-        and config.SPAM_LEARNING != "off"
-        and (
-            (learn_type == "spam" and config.SPAM_LEARNING in ("spam", "both"))
-            or (learn_type == "ham" and config.SPAM_LEARNING in ("ham", "both"))
-        )
-    )
-
-def learn_sentence(learn_type, dry_run):
-    if dry_run:
-        if learn_type == "ham":
-            return "Would have submitted to rspamd as ham."
-        if learn_type == "spam":
-            return "Would have submitted to rspamd as spam."
-    else:
-        if learn_type == "ham":
-            return "Submitted to rspamd as ham."
-        if learn_type == "spam":
-            return "Submitted to rspamd as spam."
-    return ""
 
 def learn_spam(raw_message, email_id=None):
     return _learn(raw_message, "spam", email_id)
@@ -114,7 +66,7 @@ def learn_ham(raw_message, email_id=None):
     return _learn(raw_message, "ham", email_id)
 
 def _learn(raw_message, learn_type, email_id=None):
-    url = f"http://{config.RSPAMD_HOST}:{config.RSPAMD_CONTROLLER_PORT}/learn{learn_type}"
+    url = "http://%s:%s/learn%s" % (config.RSPAMD_HOST, config.RSPAMD_CONTROLLER_PORT, learn_type)
     logger.debug("Submitting message to rspamd for %s learning at %s", learn_type, url, extra={"email_id": email_id})
 
     try:

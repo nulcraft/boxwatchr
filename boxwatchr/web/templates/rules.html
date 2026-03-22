@@ -27,10 +27,17 @@
         <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <span class="fw-semibold">{{ rule.name or "(unnamed)" }}</span>
-                <span class="badge badge-{{ 'spam' if rule.learn == 'spam' else 'ham' }}">{{ rule.learn }}</span>
                 <span class="badge text-bg-secondary">match {{ rule.match or "all" }}</span>
             </div>
             <div class="d-flex gap-2 flex-shrink-0">
+                <form method="post" action="/rules/{{ idx }}/move-up">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm" {{ 'disabled' if loop.first }}>&#8593;</button>
+                </form>
+                <form method="post" action="/rules/{{ idx }}/move-down">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm" {{ 'disabled' if loop.last }}>&#8595;</button>
+                </form>
                 <a href="/rules/{{ idx }}/edit" class="btn btn-outline-secondary btn-sm">Edit</a>
                 <form method="post" action="/rules/{{ idx }}/run" data-rule-name="{{ rule.name }}" onsubmit="return confirm('Run the ' + this.dataset.ruleName + ' rule against all emails in your watched folder?')">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -49,9 +56,18 @@
                 {% if rule.conditions %}
                 <ul class="list-unstyled mb-0 small">
                     {% for c in rule.conditions %}
+                    {% set op_labels = {
+                        "equals": "equals",
+                        "contains": "contains",
+                        "is_empty": "is empty",
+                        "greater_than": ">",
+                        "less_than": "<",
+                        "greater_than_or_equal": ">=",
+                        "less_than_or_equal": "<="
+                    } %}
                     <li class="mb-1">
                         <code>{{ c.field }}</code>
-                        <span class="text-secondary">{{ c.operator }}</span>
+                        <span class="text-secondary">{{ op_labels.get(c.operator, c.operator) }}</span>
                         {% if c.operator == "is_empty" %}
                         <span class="text-secondary">{{ "empty" if c.value == "true" else "not empty" }}</span>
                         {% else %}

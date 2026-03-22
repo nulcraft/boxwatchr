@@ -1,5 +1,3 @@
-from boxwatchr import config
-
 def action_sentence(action, dry_run):
     t = action["type"]
     dest = action.get("destination", "")
@@ -18,6 +16,10 @@ def action_sentence(action, dry_run):
             return "Would have flagged."
         if t == "unflag":
             return "Would have unflagged."
+        if t == "learn_spam":
+            return "Would have submitted to rspamd as spam."
+        if t == "learn_ham":
+            return "Would have submitted to rspamd as ham."
     else:
         if t == "move":
             return "Moved to %s." % dest
@@ -33,6 +35,10 @@ def action_sentence(action, dry_run):
             return "Flagged."
         if t == "unflag":
             return "Unflagged."
+        if t == "learn_spam":
+            return "Submitted to rspamd as spam."
+        if t == "learn_ham":
+            return "Submitted to rspamd as ham."
     return ""
 
 def failed_action_sentence(action):
@@ -52,12 +58,22 @@ def failed_action_sentence(action):
         return "Failed to flag."
     if t == "unflag":
         return "Failed to unflag."
+    if t == "learn_spam":
+        return "Failed to submit to rspamd as spam."
+    if t == "learn_ham":
+        return "Failed to submit to rspamd as ham."
     return "Action failed."
 
-def build_notes_opener(matched_rule, spam_score, dry_run):
+def skipped_learn_sentence(action):
+    t = action["type"]
+    if t == "learn_spam":
+        return "Skipped rspamd spam learning: raw message not available."
+    if t == "learn_ham":
+        return "Skipped rspamd ham learning: raw message not available."
+    return ""
+
+def build_notes_opener(matched_rule, dry_run):
     prefix = "[DRY RUN] " if dry_run else ""
     if matched_rule:
         return "%sThe rule '%s' matched." % (prefix, matched_rule["name"])
-    if spam_score is not None and spam_score >= config.SPAM_THRESHOLD:
-        return "%sNo rule matched. Spam score %.1f exceeded threshold." % (prefix, spam_score)
     return "%sNo rule matched." % prefix

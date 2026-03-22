@@ -27,8 +27,6 @@ app = Flask(__name__, template_folder="templates")
 _EMAILS_PAGE_SIZE = 15
 _LOGS_PAGE_SIZE = 100
 _LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
-_SPAM_ACTIONS = ["spam", "delete"]
-_SPAM_LEARNING_OPTIONS = ["both", "spam", "ham", "off"]
 _TLS_MODES = ["ssl", "starttls", "none"]
 
 _folder_cache = {"folders": [], "expires": 0.0, "fetching": False}
@@ -156,11 +154,11 @@ def _require_auth(f):
 def _score_class(score):
     if score is None:
         return ""
-    if score >= config.SPAM_THRESHOLD:
+    if score >= 10:
         return "text-danger fw-bold"
-    if score <= config.HAM_THRESHOLD:
-        return "text-info"
-    return "text-warning fw-bold"
+    if score >= 5:
+        return "text-warning fw-bold"
+    return ""
 
 def _extract_message_id(raw_headers):
     if not raw_headers:
@@ -188,11 +186,8 @@ def _imap_find_by_message_id(client, message_id, folders):
 
 def _learn_from_imap(email_id, raw_headers, learn_type, search_folders):
     message_id = _extract_message_id(raw_headers)
-    if not message_id or not spam.should_learn(learn_type):
-        logger.debug(
-            "Skipping %s learning for email %s: message_id=%r, should_learn=%s",
-            learn_type, email_id, message_id, spam.should_learn(learn_type)
-        )
+    if not message_id:
+        logger.debug("Skipping %s learning for email %s: no message_id", learn_type, email_id)
         return
     logger.debug("Fetching RFC822 for %s learning: email=%s, message_id=%r", learn_type, email_id, message_id)
     try:
@@ -366,24 +361,6 @@ def _save_app_config(form):
     if log_level not in _LEVELS:
         log_level = "INFO"
 
-    spam_action = form.get("spam_action", "spam").strip()
-    if spam_action not in _SPAM_ACTIONS:
-        spam_action = "spam"
-
-    spam_learning = form.get("spam_learning", "both").strip()
-    if spam_learning not in _SPAM_LEARNING_OPTIONS:
-        spam_learning = "both"
-
-    try:
-        spam_threshold = float(form.get("spam_threshold", "6.0"))
-    except ValueError:
-        spam_threshold = 6.0
-
-    try:
-        ham_threshold = float(form.get("ham_threshold", "2.0"))
-    except ValueError:
-        ham_threshold = 2.0
-
     try:
         db_prune_days = int(form.get("db_prune_days", "0"))
         if db_prune_days < 0:
@@ -406,10 +383,6 @@ def _save_app_config(form):
         "imap_accounts": json.dumps([account]),
         "log_level": log_level,
         "dry_run": "true" if dry_run else "false",
-        "spam_threshold": str(spam_threshold),
-        "spam_action": spam_action,
-        "spam_learning": spam_learning,
-        "ham_threshold": str(ham_threshold),
         "web_password": web_password_stored,
         "db_prune_days": str(db_prune_days),
     })
@@ -420,8 +393,7 @@ def _save_app_config(form):
 def setup():
     if config.SETUP_COMPLETE:
         return redirect(url_for("index"))
-    return render_template("setup.html", levels=_LEVELS, spam_actions=_SPAM_ACTIONS,
-                           spam_learning_options=_SPAM_LEARNING_OPTIONS, tls_modes=_TLS_MODES,
+    return render_template("setup.html", levels=_LEVELS, tls_modes=_TLS_MODES,
                            show_logout=False, setup_mode=True)
 
 @app.route("/setup", methods=["POST"])
@@ -447,8 +419,6 @@ def setup_post():
 
     if errors:
         return render_template("setup.html", errors=errors, levels=_LEVELS,
-                               spam_actions=_SPAM_ACTIONS,
-                               spam_learning_options=_SPAM_LEARNING_OPTIONS,
                                tls_modes=_TLS_MODES,
                                show_logout=False, setup_mode=True)
 
@@ -458,8 +428,6 @@ def setup_post():
 
     logger.info("Setup completed. Restart the container to begin monitoring.")
     return render_template("setup.html", completed=True, levels=_LEVELS,
-                           spam_actions=_SPAM_ACTIONS,
-                           spam_learning_options=_SPAM_LEARNING_OPTIONS,
                            tls_modes=_TLS_MODES,
                            show_logout=False, setup_mode=True)
 
@@ -532,15 +500,9 @@ def config_page():
         "config.html",
         account=account,
         levels=_LEVELS,
-        spam_actions=_SPAM_ACTIONS,
-        spam_learning_options=_SPAM_LEARNING_OPTIONS,
         tls_modes=_TLS_MODES,
         log_level=config.LOG_LEVEL,
         dry_run=config.DRYRUN,
-        spam_threshold=config.SPAM_THRESHOLD,
-        spam_action=config.SPAM_ACTION,
-        spam_learning=config.SPAM_LEARNING,
-        ham_threshold=config.HAM_THRESHOLD,
         db_prune_days=config.DB_PRUNE_DAYS,
         has_password=bool(config.WEB_PASSWORD),
         tls_mode=config.IMAP_TLS_MODE,
@@ -836,6 +798,7 @@ _FIELD_LABELS = {
     "attachment_name": "File name",
     "attachment_extension": "Extension",
     "attachment_content_type": "Content type",
+    "rspamd_score": "Spam score",
 }
 
 _ACTION_LABELS = {
@@ -846,6 +809,8 @@ _ACTION_LABELS = {
     "mark_unread": "Mark as unread",
     "flag": "Flag message",
     "unflag": "Remove flag",
+    "learn_spam": "Submit to rspamd as spam",
+    "learn_ham": "Submit to rspamd as ham",
 }
 
 def _get_imap_folders():
@@ -920,7 +885,6 @@ def _parse_rule_form(form):
     return {
         "name": form.get("name", "").strip(),
         "match": form.get("match", "all"),
-        "learn": form.get("learn", "spam"),
         "conditions": conditions,
         "actions": actions,
     }
@@ -942,7 +906,7 @@ def rules_list():
 @_require_auth
 def rule_new():
     error = None
-    rule = {"name": "", "match": "all", "learn": "spam", "conditions": [], "actions": []}
+    rule = {"name": "", "match": "all", "conditions": [], "actions": []}
     folders = _get_imap_folders()
 
     if request.method == "POST":
@@ -1039,10 +1003,7 @@ def rule_run(index):
     if rule is None:
         return redirect(url_for("rules_list"))
 
-    logger.info(
-        "Rule '%s' run manually (learn=%s, DRYRUN=%s)",
-        rule["name"], rule["learn"], config.DRYRUN
-    )
+    logger.info("Rule '%s' run manually (DRYRUN=%s)", rule["name"], config.DRYRUN)
 
     matched = 0
     actioned = 0
@@ -1074,6 +1035,8 @@ def rule_run(index):
         logger.error("Rule run: cannot execute rule '%s': %s", rule["name"], e)
         return redirect(url_for("rules_list", run_result="Rule '%s' failed: %s" % (rule["name"], e)))
 
+    needs_rfc822 = any(a["type"] in {"learn_spam", "learn_ham"} for a in resolved_actions)
+
     try:
         client = imap.connect()
         try:
@@ -1098,7 +1061,7 @@ def rule_run(index):
                     "attachments": json.loads(row["attachments"] or "[]"),
                 }
 
-                if not check_rule(rule, email_data):
+                if not check_rule(rule, email_data, spam_score=row["spam_score"]):
                     logger.debug("Rule run: UID %s did not match rule '%s'", uid, rule["name"])
                     continue
 
@@ -1109,37 +1072,67 @@ def rule_run(index):
                     extra={"email_id": email_id}
                 )
 
-                will_learn = spam.should_learn(rule["learn"])
                 raw_message = b""
-                if will_learn and not config.DRYRUN:
+                if needs_rfc822 and not config.DRYRUN:
                     logger.debug(
-                        "Rule run: fetching RFC822 for UID %s to submit as %s",
-                        uid, rule["learn"],
-                        extra={"email_id": email_id}
+                        "Rule run: fetching RFC822 for UID %s for learning",
+                        uid, extra={"email_id": email_id}
                     )
                     try:
                         fetch_result = client.fetch([uid], ["RFC822"])
                         raw_message = fetch_result.get(uid, {}).get(b"RFC822", b"")
                         if not raw_message:
                             logger.warning(
-                                "Rule run: RFC822 body empty for UID %s, skipping learning",
+                                "Rule run: RFC822 body empty for UID %s",
                                 uid, extra={"email_id": email_id}
                             )
-                            will_learn = False
                     except Exception as e:
                         logger.error(
                             "Rule run: failed to fetch RFC822 for UID %s: %s",
                             uid, e, extra={"email_id": email_id}
                         )
-                        will_learn = False
 
                 executed = []
+                rspamd_learned = None
                 for action in resolved_actions:
                     action_type = action["type"]
                     logger.debug(
                         "Rule run: executing action %s for UID %s",
                         action_type, uid, extra={"email_id": email_id}
                     )
+
+                    if action_type in {"learn_spam", "learn_ham"}:
+                        if not config.DRYRUN:
+                            if raw_message:
+                                try:
+                                    if action_type == "learn_spam":
+                                        ok = spam.learn_spam(raw_message, email_id=email_id)
+                                    else:
+                                        ok = spam.learn_ham(raw_message, email_id=email_id)
+                                    if ok:
+                                        rspamd_learned = "spam" if action_type == "learn_spam" else "ham"
+                                        actioned += 1
+                                        executed.append(action)
+                                    else:
+                                        logger.warning(
+                                            "Rule run: %s returned failure for UID %s",
+                                            action_type, uid, extra={"email_id": email_id}
+                                        )
+                                except Exception as e:
+                                    logger.error(
+                                        "Rule run: %s failed for UID %s: %s",
+                                        action_type, uid, e, extra={"email_id": email_id}
+                                    )
+                            else:
+                                logger.warning(
+                                    "Rule run: skipping %s for UID %s: no RFC822 body",
+                                    action_type, uid, extra={"email_id": email_id}
+                                )
+                        else:
+                            rspamd_learned = "spam" if action_type == "learn_spam" else "ham"
+                            executed.append(action)
+                        continue
+
                     try:
                         imap.execute_action(client, action, uid, email_id=email_id)
                         executed.append(action)
@@ -1152,32 +1145,10 @@ def rule_run(index):
                     if action_type in TERMINAL_ACTIONS:
                         break
 
-                learned_ok = False
-                if will_learn and raw_message and not config.DRYRUN:
-                    try:
-                        if rule["learn"] == "spam":
-                            learned_ok = spam.learn_spam(raw_message, email_id=email_id)
-                        elif rule["learn"] == "ham":
-                            learned_ok = spam.learn_ham(raw_message, email_id=email_id)
-                    except Exception as e:
-                        logger.error(
-                            "Rule run: rspamd learning failed for UID %s: %s",
-                            uid, e, extra={"email_id": email_id}
-                        )
-                        will_learn = False
-
                 prefix = "[DRY RUN] " if config.DRYRUN else ""
                 notes_parts = ["%sRule '%s' applied manually." % (prefix, rule["name"])]
                 for a in executed:
                     notes_parts.append(action_sentence(a, config.DRYRUN))
-                if will_learn:
-                    notes_parts.append(spam.learn_sentence(rule["learn"], config.DRYRUN))
-
-                rspamd_learned = None
-                if not config.DRYRUN and will_learn and learned_ok:
-                    rspamd_learned = rule["learn"]
-                elif config.DRYRUN and will_learn:
-                    rspamd_learned = rule["learn"]
 
                 history = json.loads(row["history"] or "[]")
                 new_entries = []
@@ -1186,6 +1157,7 @@ def rule_run(index):
                         dict({"at": processed_at, "by": "boxwatchr", "action": a["type"]},
                              **{"destination": a["destination"]} if "destination" in a else {})
                         for a in executed
+                        if a["type"] not in {"learn_spam", "learn_ham"}
                     ]
                 enqueue_email_update(
                     email_id,
@@ -1213,6 +1185,36 @@ def rule_run(index):
         "rules_list",
         run_result="Rule '%s' ran: %s email(s) matched, %s action(s) taken." % (rule["name"], matched, actioned)
     ))
+
+
+@app.route("/rules/<int:index>/move-up", methods=["POST"])
+@_require_auth
+@_require_csrf
+def rule_move_up(index):
+    raw_rules = _read_rules_raw()
+    if index <= 0 or index >= len(raw_rules):
+        abort(404)
+    raw_rules[index - 1], raw_rules[index] = raw_rules[index], raw_rules[index - 1]
+    try:
+        _write_rules_raw(raw_rules)
+    except OSError as e:
+        logger.error("Failed to write rules file after move-up: %s", e)
+    return redirect(url_for("rules_list"))
+
+
+@app.route("/rules/<int:index>/move-down", methods=["POST"])
+@_require_auth
+@_require_csrf
+def rule_move_down(index):
+    raw_rules = _read_rules_raw()
+    if index < 0 or index >= len(raw_rules) - 1:
+        abort(404)
+    raw_rules[index], raw_rules[index + 1] = raw_rules[index + 1], raw_rules[index]
+    try:
+        _write_rules_raw(raw_rules)
+    except OSError as e:
+        logger.error("Failed to write rules file after move-down: %s", e)
+    return redirect(url_for("rules_list"))
 
 def _run_server():
     logging.getLogger("werkzeug").setLevel(logging.ERROR)

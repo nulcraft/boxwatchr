@@ -8,7 +8,7 @@ from email import message_from_bytes, message_from_string
 from boxwatchr import config, imap, spam, rules, health, __version__
 from boxwatchr.web.dashboard import start_dashboard
 from boxwatchr.imap import FatalImapError
-from boxwatchr.notes import action_sentence, failed_action_sentence, build_notes_opener
+from boxwatchr.notes import action_sentence, failed_action_sentence, skipped_learn_sentence, build_notes_opener
 from boxwatchr.database import set_processing, clear_email_id_from_logs, enqueue_email, enqueue_email_update, get_known_uids, get_unprocessed_emails, get_email_by_message_id, update_email_uid
 from boxwatchr.rules import watch_rules, TERMINAL_ACTIONS
 from boxwatchr.logger import get_logger
@@ -48,8 +48,6 @@ def _print_startup_checks(loaded_rules):
     print("Trash folder: %s" % config.IMAP_TRASH_FOLDER, flush=True)
     print("Spam folder: %s" % config.IMAP_SPAM_FOLDER, flush=True)
     print("Dry run: %s" % ("enabled" if config.DRYRUN else "disabled"), flush=True)
-    print("Spam threshold: ≥%.1f, action: %s" % (config.SPAM_THRESHOLD, config.SPAM_ACTION), flush=True)
-    print("Spam learning: %s, ham threshold: ≤%.1f" % (config.SPAM_LEARNING, config.HAM_THRESHOLD), flush=True)
     print("Rules loaded: %d" % len(loaded_rules), flush=True)
     print(flush=True)
 
@@ -85,23 +83,6 @@ def _resolve_rule_actions(rule_actions, uid, email_id):
         else:
             actions.append({"type": action_type})
     return actions
-
-def _resolve_spam_action(uid, email_id):
-    if config.SPAM_ACTION == "delete":
-        if config.IMAP_TRASH_FOLDER:
-            return {"type": "delete", "destination": config.IMAP_TRASH_FOLDER}
-        logger.error(
-            "Cannot move spam email UID %s to trash: trash folder not configured. Set it in the Config page.",
-            uid, extra={"email_id": email_id}
-        )
-    else:
-        if config.IMAP_SPAM_FOLDER:
-            return {"type": "spam", "destination": config.IMAP_SPAM_FOLDER}
-        logger.error(
-            "Cannot move spam email UID %s to spam folder: spam folder not configured. Set it in the Config page.",
-            uid, extra={"email_id": email_id}
-        )
-    return None
 
 def _decode(value):
     if isinstance(value, bytes):
@@ -211,7 +192,7 @@ def reprocess_pending_emails(client, current_uids):
             "attachments": stored_attachments,
         }
 
-        matched_rule = rules.evaluate(email_data)
+        matched_rule = rules.evaluate(email_data, spam_score=spam_score)
         rule_name = matched_rule["name"] if matched_rule else "none"
         logger.info(
             "Pending email UID %s re-evaluated: rule=%s",
@@ -219,14 +200,8 @@ def reprocess_pending_emails(client, current_uids):
         )
 
         actions = []
-
         if matched_rule:
             actions = _resolve_rule_actions(matched_rule["actions"], uid, email_id)
-
-        elif spam_score is not None and spam_score >= config.SPAM_THRESHOLD:
-            spam_action = _resolve_spam_action(uid, email_id)
-            if spam_action:
-                actions.append(spam_action)
 
         logger.debug(
             "Pending email UID %s: %s action(s) to execute: %s",
@@ -238,6 +213,13 @@ def reprocess_pending_emails(client, current_uids):
         executed = []
         for action in actions:
             action_type = action["type"]
+            if action_type in {"learn_spam", "learn_ham"}:
+                logger.info(
+                    "Skipping %s action for pending email UID %s: raw message not stored",
+                    action_type, uid, extra={"email_id": email_id}
+                )
+                executed.append((action, "skipped"))
+                continue
             logger.info(
                 "Reprocessing pending email UID %s: action=%s, destination=%s, rule=%s",
                 uid, action_type, action.get("destination") or "none", rule_name,
@@ -257,10 +239,12 @@ def reprocess_pending_emails(client, current_uids):
             if action_type in TERMINAL_ACTIONS:
                 break
 
-        notes_parts = [build_notes_opener(matched_rule, spam_score, config.DRYRUN)]
+        notes_parts = [build_notes_opener(matched_rule, config.DRYRUN)]
         if executed:
-            for action, failed in executed:
-                if failed:
+            for action, state in executed:
+                if state == "skipped":
+                    notes_parts.append(skipped_learn_sentence(action))
+                elif state:
                     notes_parts.append(failed_action_sentence(action))
                 else:
                     notes_parts.append(action_sentence(action, config.DRYRUN))
@@ -271,8 +255,8 @@ def reprocess_pending_emails(client, current_uids):
         current_history = json.loads(row["history"] or "[]")
         new_history_entries = []
         if not config.DRYRUN:
-            for action, failed in executed:
-                if not failed:
+            for action, state in executed:
+                if not state:
                     entry = {"at": processed_at, "by": "boxwatchr", "action": action["type"]}
                     if "destination" in action:
                         entry["destination"] = action["destination"]
@@ -376,41 +360,24 @@ def process_email(client, uid, message):
 
         logger.info("Processing email UID %s from %s", uid, sender, extra={"email_id": email_id})
 
-        spam_result = spam.check(raw_message, email_id=email_id)
-        if spam_result is None:
+        spam_score = spam.get_rspamd_score(raw_message, email_id=email_id)
+        if spam_score is None:
             raise RuntimeError("rspamd unreachable")
 
-        spam_score = spam_result["score"]
-        matched_rule = rules.evaluate(email_data)
+        matched_rule = rules.evaluate(email_data, spam_score=spam_score)
         rule_name = matched_rule["name"] if matched_rule else "none"
 
-        learn_type = None
         actions = []
-
         if matched_rule:
-            learn_type = matched_rule["learn"]
             actions = _resolve_rule_actions(matched_rule["actions"], uid, email_id)
 
-        elif spam_result["is_spam"]:
-            learn_type = "spam"
-            spam_action = _resolve_spam_action(uid, email_id)
-            if spam_action:
-                actions.append(spam_action)
-
-        elif spam_result["score"] <= config.HAM_THRESHOLD:
-            learn_type = "ham"
-
         logger.debug(
-            "Email UID %s: spam_score=%.2f, is_spam=%s, rule=%s, learn_type=%s",
-            uid, spam_score, spam_result["is_spam"], rule_name, learn_type,
-            extra={"email_id": email_id}
-        )
-        logger.debug(
-            "Email UID %s: %s action(s) to execute: %s",
-            uid, len(actions), [a["type"] for a in actions],
+            "Email UID %s: spam_score=%.2f, rule=%s, %s action(s): %s",
+            uid, spam_score, rule_name, len(actions), [a["type"] for a in actions],
             extra={"email_id": email_id}
         )
 
+        rspamd_learned = None
         for action in actions:
             action_type = action["type"]
             logger.debug(
@@ -418,32 +385,37 @@ def process_email(client, uid, message):
                 action_type, action.get("destination") or "none", uid,
                 extra={"email_id": email_id}
             )
-            imap.execute_action(client, action, uid, email_id=email_id)
+            if action_type == "learn_spam":
+                if not config.DRYRUN:
+                    ok = spam.learn_spam(raw_message, email_id=email_id)
+                    if ok:
+                        rspamd_learned = "spam"
+                else:
+                    rspamd_learned = "spam"
+            elif action_type == "learn_ham":
+                if not config.DRYRUN:
+                    ok = spam.learn_ham(raw_message, email_id=email_id)
+                    if ok:
+                        rspamd_learned = "ham"
+                else:
+                    rspamd_learned = "ham"
+            else:
+                imap.execute_action(client, action, uid, email_id=email_id)
             if action_type in TERMINAL_ACTIONS:
                 break
 
-        will_learn = spam.should_learn(learn_type)
-        logger.debug(
-            "Email UID %s: will_learn=%s, learn_type=%s, DRYRUN=%s, SPAM_LEARNING=%s",
-            uid, will_learn, learn_type, config.DRYRUN, config.SPAM_LEARNING,
-            extra={"email_id": email_id}
-        )
-
-        learned_ok = False
-        if not config.DRYRUN and will_learn:
-            if learn_type == "spam":
-                learned_ok = spam.learn_spam(raw_message, email_id=email_id)
-            elif learn_type == "ham":
-                learned_ok = spam.learn_ham(raw_message, email_id=email_id)
-
-        notes_parts = [build_notes_opener(matched_rule, spam_score, config.DRYRUN)]
+        notes_parts = [build_notes_opener(matched_rule, config.DRYRUN)]
         if actions:
             for action in actions:
-                notes_parts.append(action_sentence(action, config.DRYRUN))
+                if action["type"] in {"learn_spam", "learn_ham"}:
+                    if rspamd_learned is not None:
+                        notes_parts.append(action_sentence(action, config.DRYRUN))
+                    else:
+                        notes_parts.append(failed_action_sentence(action))
+                else:
+                    notes_parts.append(action_sentence(action, config.DRYRUN))
         else:
             notes_parts.append("No action taken.")
-        if will_learn:
-            notes_parts.append(spam.learn_sentence(learn_type, config.DRYRUN))
         processed_notes = " ".join(notes_parts)
 
         processed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -451,16 +423,12 @@ def process_email(client, uid, message):
         history = []
         if not config.DRYRUN:
             for a in actions:
+                if a["type"] in {"learn_spam", "learn_ham"}:
+                    continue
                 entry = {"at": processed_at, "by": "boxwatchr", "action": a["type"]}
                 if "destination" in a:
                     entry["destination"] = a["destination"]
                 history.append(entry)
-
-        rspamd_learned = None
-        if not config.DRYRUN and will_learn and learned_ok:
-            rspamd_learned = learn_type
-        elif config.DRYRUN and will_learn:
-            rspamd_learned = learn_type
 
         enqueue_email(
             uid=str(uid),

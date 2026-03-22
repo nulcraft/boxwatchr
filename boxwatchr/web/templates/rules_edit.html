@@ -31,13 +31,6 @@
                         <option value="any" {% if rule.match == "any" %}selected{% endif %}>Match ANY condition</option>
                     </select>
                 </div>
-                <div class="col-sm-6">
-                    <label class="form-label">Train rspamd as</label>
-                    <select name="learn" class="form-select">
-                        <option value="spam" {% if rule.learn != "ham" %}selected{% endif %}>Spam</option>
-                        <option value="ham" {% if rule.learn == "ham" %}selected{% endif %}>Ham (not spam)</option>
-                    </select>
-                </div>
             </div>
         </div>
     </div>
@@ -60,8 +53,9 @@
 
             <div id="conditions-container">
                 {% for c in rule.conditions %}
+                {% set is_numeric = c.field == "rspamd_score" %}
                 <div class="condition-row d-flex gap-2 align-items-start mb-2 flex-wrap flex-sm-nowrap">
-                    <select name="condition_field" class="form-select cond-field">
+                    <select name="condition_field" class="form-select cond-field" onchange="onFieldChange(this)">
                         <optgroup label="Sender">
                             <option value="sender" {% if c.field == "sender" %}selected{% endif %}>Sender — full address</option>
                             <option value="sender_local" {% if c.field == "sender_local" %}selected{% endif %}>Sender — local part (before @)</option>
@@ -87,14 +81,24 @@
                             <option value="attachment_extension" {% if c.field == "attachment_extension" %}selected{% endif %}>Attachment — extension</option>
                             <option value="attachment_content_type" {% if c.field == "attachment_content_type" %}selected{% endif %}>Attachment — content type</option>
                         </optgroup>
+                        <optgroup label="Spam Score">
+                            <option value="rspamd_score" {% if c.field == "rspamd_score" %}selected{% endif %}>rspamd score</option>
+                        </optgroup>
                     </select>
                     <select name="condition_operator" class="form-select cond-operator" onchange="onOperatorChange(this)">
+                        {% if is_numeric %}
+                        <option value="greater_than" {% if c.operator == "greater_than" %}selected{% endif %}>greater than</option>
+                        <option value="less_than" {% if c.operator == "less_than" %}selected{% endif %}>less than</option>
+                        <option value="greater_than_or_equal" {% if c.operator == "greater_than_or_equal" %}selected{% endif %}>greater than or equal</option>
+                        <option value="less_than_or_equal" {% if c.operator == "less_than_or_equal" %}selected{% endif %}>less than or equal</option>
+                        {% else %}
                         <option value="equals" {% if c.operator == "equals" %}selected{% endif %}>equals</option>
                         <option value="contains" {% if c.operator == "contains" %}selected{% endif %}>contains</option>
                         <option value="is_empty" {% if c.operator == "is_empty" %}selected{% endif %}>is empty</option>
+                        {% endif %}
                     </select>
                     <input name="condition_value" type="text" class="form-control value-text flex-grow-1" placeholder="Value" value="{{ c.value if c.operator != 'is_empty' else '' }}" {% if c.operator == "is_empty" %}disabled{% endif %}>
-                    <select name="condition_value" class="form-select value-bool flex-grow-1 {% if c.operator != 'is_empty' %}d-none{% endif %}" {% if c.operator != "is_empty" %}disabled{% endif %}>
+                    <select name="condition_value" class="form-select value-bool flex-grow-1 {% if c.operator != 'is_empty' or is_numeric %}d-none{% endif %}" {% if c.operator != "is_empty" or is_numeric %}disabled{% endif %}>
                         <option value="true" {% if c.value == "true" %}selected{% endif %}>is empty</option>
                         <option value="false" {% if c.value == "false" %}selected{% endif %}>is not empty</option>
                     </select>
@@ -125,6 +129,8 @@
                         <option value="mark_unread" {% if a.type == "mark_unread" %}selected{% endif %}>Mark as unread</option>
                         <option value="flag" {% if a.type == "flag" %}selected{% endif %}>Flag message</option>
                         <option value="unflag" {% if a.type == "unflag" %}selected{% endif %}>Remove flag</option>
+                        <option value="learn_spam" {% if a.type == "learn_spam" %}selected{% endif %}>Submit to rspamd as spam</option>
+                        <option value="learn_ham" {% if a.type == "learn_ham" %}selected{% endif %}>Submit to rspamd as ham</option>
                     </select>
                     {% if folders %}
                     <select name="action_destination" class="form-select action-dest flex-grow-1{% if a.type != 'move' %} d-none{% endif %}"{% if a.type != 'move' %} disabled{% endif %}>
@@ -160,7 +166,7 @@
 
 <template id="condition-template">
     <div class="condition-row d-flex gap-2 align-items-start mb-2 flex-wrap flex-sm-nowrap">
-        <select name="condition_field" class="form-select cond-field">
+        <select name="condition_field" class="form-select cond-field" onchange="onFieldChange(this)">
             <optgroup label="Sender">
                 <option value="sender">Sender — full address</option>
                 <option value="sender_local">Sender — local part (before @)</option>
@@ -185,6 +191,9 @@
                 <option value="attachment_name">Attachment — file name</option>
                 <option value="attachment_extension">Attachment — extension</option>
                 <option value="attachment_content_type">Attachment — content type</option>
+            </optgroup>
+            <optgroup label="Spam Score">
+                <option value="rspamd_score">rspamd score</option>
             </optgroup>
         </select>
         <select name="condition_operator" class="form-select cond-operator" onchange="onOperatorChange(this)">
@@ -211,16 +220,18 @@
             <option value="mark_unread">Mark as unread</option>
             <option value="flag">Flag message</option>
             <option value="unflag">Remove flag</option>
+            <option value="learn_spam">Submit to rspamd as spam</option>
+            <option value="learn_ham">Submit to rspamd as ham</option>
         </select>
         {% if folders %}
-        <select name="action_destination" class="form-select action-dest flex-grow-1">
+        <select name="action_destination" class="form-select action-dest flex-grow-1 d-none" disabled>
             <option value="">— Select folder —</option>
             {% for folder in folders %}
             <option value="{{ folder }}">{{ folder }}</option>
             {% endfor %}
         </select>
         {% else %}
-        <input name="action_destination" type="text" class="form-control action-dest flex-grow-1" placeholder="Folder (e.g. INBOX.Newsletters)">
+        <input name="action_destination" type="text" class="form-control action-dest flex-grow-1 d-none" placeholder="Folder (e.g. INBOX.Newsletters)" disabled>
         {% endif %}
         <button type="button" class="btn btn-outline-danger flex-shrink-0" onclick="removeAction(this)">&times;</button>
     </div>

@@ -80,43 +80,6 @@
 
     <div class="card mb-4">
         <div class="card-body">
-            <h2 class="card-subtitle">Spam Handling</h2>
-            <div class="row g-3">
-                <div class="col-12 col-md-4">
-                    <label class="form-label">Spam Score Threshold</label>
-                    <input type="number" step="0.1" name="spam_threshold" class="form-control" value="{{ spam_threshold }}">
-                    <div class="form-text">Emails scoring at or above this are treated as spam.</div>
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label">Action for Spam-Scored Emails</label>
-                    <select name="spam_action" class="form-select">
-                        {% for opt in spam_actions %}
-                        <option value="{{ opt }}" {% if opt == spam_action %}selected{% endif %}>
-                            {% if opt == "spam" %}Move to spam folder{% else %}Move to trash folder{% endif %}
-                        </option>
-                        {% endfor %}
-                    </select>
-                    <div class="form-text">Applied when no rule matches and rspamd score exceeds the threshold.</div>
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label">Automatic rspamd Learning</label>
-                    <select name="spam_learning" class="form-select">
-                        {% for opt in spam_learning_options %}
-                        <option value="{{ opt }}" {% if opt == spam_learning %}selected{% endif %}>{{ opt }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-12 col-md-4">
-                    <label class="form-label">Ham Score Threshold</label>
-                    <input type="number" step="0.1" name="ham_threshold" class="form-control" value="{{ ham_threshold }}">
-                    <div class="form-text">Emails scoring at or below this are submitted to rspamd as ham.</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card mb-4">
-        <div class="card-body">
             <h2 class="card-subtitle">Application</h2>
             <div class="row g-3">
                 <div class="col-12 col-md-4">
