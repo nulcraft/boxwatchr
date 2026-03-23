@@ -6,12 +6,12 @@ import secrets
 import threading
 import logging
 import time
-import json
+import uuid
 from datetime import datetime, timezone
 from flask import Flask, abort, redirect, request, session, url_for
 from boxwatchr import config
-from boxwatchr.crypto import decrypt_password, encrypt_password
-from boxwatchr.database import get_config, set_config, bulk_set_config
+from boxwatchr.crypto import encrypt_password
+from boxwatchr.database import get_config, set_config, bulk_set_config, upsert_account, get_first_account
 from boxwatchr.logger import get_logger
 
 logger = get_logger("boxwatchr.web")
@@ -121,29 +121,29 @@ def _save_app_config(form):
     if tls_mode not in _TLS_MODES:
         tls_mode = "ssl"
 
-    existing_encrypted = ""
-    if not new_password:
-        try:
-            saved = json.loads(get_config("imap_accounts", "[]"))
-            existing_encrypted = (saved[0].get("password", "") if saved else "")
-        except (json.JSONDecodeError, IndexError, KeyError):
-            existing_encrypted = ""
+    existing_account = get_first_account()
+    existing_encrypted = existing_account["password"] if (existing_account and not new_password) else ""
 
     try:
         port_int = int(port)
     except ValueError:
         port_int = 993
 
-    account = {
-        "name": form.get("account_name", "Default").strip() or "Default",
-        "host": host,
-        "port": port_int,
-        "username": username,
-        "password": encrypt_password(new_password) if new_password else existing_encrypted,
-        "folder": folder,
-        "poll_interval": 60,
-        "tls_mode": tls_mode,
-    }
+    account_id = config.ACCOUNT_ID if config.ACCOUNT_ID else str(uuid.uuid4())
+    account_name = form.get("account_name", "Default").strip() or "Default"
+    encrypted_password = encrypt_password(new_password) if new_password else existing_encrypted
+
+    upsert_account(
+        account_id=account_id,
+        name=account_name,
+        host=host,
+        port=port_int,
+        username=username,
+        password=encrypted_password,
+        folder=folder,
+        poll_interval=60,
+        tls_mode=tls_mode,
+    )
 
     log_level = form.get("log_level", "INFO").strip().upper()
     if log_level not in _LEVELS:
@@ -168,7 +168,6 @@ def _save_app_config(form):
         web_password_stored = config.WEB_PASSWORD
 
     bulk_set_config({
-        "imap_accounts": json.dumps([account]),
         "log_level": log_level,
         "dry_run": "true" if dry_run else "false",
         "web_password": web_password_stored,

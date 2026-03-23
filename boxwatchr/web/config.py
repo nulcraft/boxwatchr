@@ -5,7 +5,15 @@ from boxwatchr.web.app import app, _require_auth, _require_csrf, _save_app_confi
 @app.route("/config", methods=["GET"])
 @_require_auth
 def config_page():
-    account = config.IMAP_ACCOUNTS[0] if config.IMAP_ACCOUNTS else {}
+    account = {
+        "id": config.ACCOUNT_ID,
+        "name": config.ACCOUNT_NAME,
+        "host": config.IMAP_HOST,
+        "port": config.IMAP_PORT,
+        "username": config.IMAP_USERNAME,
+        "folder": config.IMAP_FOLDER,
+        "tls_mode": config.IMAP_TLS_MODE,
+    }
     folders = imap.get_folder_list() if config.SETUP_COMPLETE else []
     return render_template(
         "config.html",

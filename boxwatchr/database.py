@@ -1,5 +1,7 @@
 import sqlite3
 import os
+import signal
+import sys
 import uuid
 import time
 import json
@@ -50,8 +52,40 @@ def _create_schema(conn):
     logger.info("Creating database schema (v1)")
 
     conn.execute("""
+        CREATE TABLE accounts (
+            id           TEXT PRIMARY KEY,
+            name         TEXT NOT NULL,
+            host         TEXT NOT NULL,
+            port         INTEGER NOT NULL DEFAULT 993,
+            username     TEXT NOT NULL,
+            password     TEXT NOT NULL DEFAULT '',
+            folder       TEXT NOT NULL DEFAULT 'INBOX',
+            poll_interval INTEGER NOT NULL DEFAULT 60,
+            tls_mode     TEXT NOT NULL DEFAULT 'ssl',
+            created_at   TEXT NOT NULL
+        )
+    """)
+    logger.debug("Accounts table created")
+
+    conn.execute("""
+        CREATE TABLE rules (
+            id                  TEXT PRIMARY KEY,
+            account_id          TEXT NOT NULL REFERENCES accounts(id),
+            position            INTEGER NOT NULL,
+            name                TEXT NOT NULL,
+            match               TEXT NOT NULL DEFAULT 'all',
+            conditions          TEXT NOT NULL DEFAULT '[]',
+            actions             TEXT NOT NULL DEFAULT '[]',
+            continue_processing INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    conn.execute("CREATE INDEX idx_rules_account_position ON rules (account_id, position)")
+    logger.debug("Rules table created")
+
+    conn.execute("""
         CREATE TABLE emails (
             id TEXT PRIMARY KEY,
+            account_id TEXT REFERENCES accounts(id),
             uid TEXT NOT NULL,
             folder TEXT NOT NULL DEFAULT '',
             sender TEXT,
@@ -70,7 +104,7 @@ def _create_schema(conn):
             processed_notes TEXT,
             message_id TEXT,
             rspamd_learned TEXT,
-            UNIQUE(uid, folder)
+            UNIQUE(uid, folder, account_id)
         )
     """)
     conn.execute("CREATE INDEX idx_emails_message_id ON emails (message_id)")
@@ -178,6 +212,178 @@ def bulk_set_config(items_dict):
         logger.error("Failed to bulk-write config: %s", e)
         raise
 
+def get_first_account():
+    try:
+        conn = get_connection()
+        try:
+            return conn.execute("SELECT * FROM accounts LIMIT 1").fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        logger.error("Failed to fetch account: %s", e)
+        return None
+
+def upsert_account(account_id, name, host, port, username, password, folder, poll_interval, tls_mode):
+    created_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        conn = get_connection()
+        try:
+            conn.execute("""
+                INSERT INTO accounts (id, name, host, port, username, password, folder, poll_interval, tls_mode, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    host = excluded.host,
+                    port = excluded.port,
+                    username = excluded.username,
+                    password = excluded.password,
+                    folder = excluded.folder,
+                    poll_interval = excluded.poll_interval,
+                    tls_mode = excluded.tls_mode
+            """, (account_id, name, host, port, username, password, folder, poll_interval, tls_mode, created_at))
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        logger.error("Failed to upsert account: %s", e)
+        raise
+
+def get_rules(account_id):
+    try:
+        conn = get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM rules WHERE account_id = ? ORDER BY position ASC",
+                (account_id,)
+            ).fetchall()
+            return rows
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        logger.error("Failed to fetch rules for account %s: %s", account_id, e)
+        return []
+
+def get_rule(rule_id):
+    try:
+        conn = get_connection()
+        try:
+            return conn.execute("SELECT * FROM rules WHERE id = ?", (rule_id,)).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        logger.error("Failed to fetch rule %s: %s", rule_id, e)
+        return None
+
+def insert_rule(account_id, name, match, conditions_json, actions_json, continue_processing=0):
+    rule_id = str(uuid.uuid4())
+    try:
+        conn = get_connection()
+        try:
+            row = conn.execute(
+                "SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM rules WHERE account_id = ?",
+                (account_id,)
+            ).fetchone()
+            position = row["next_pos"]
+            conn.execute("""
+                INSERT INTO rules (id, account_id, position, name, match, conditions, actions, continue_processing)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (rule_id, account_id, position, name, match, conditions_json, actions_json, int(continue_processing)))
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        logger.error("Failed to insert rule: %s", e)
+        raise
+    return rule_id
+
+def update_rule(rule_id, name, match, conditions_json, actions_json, continue_processing=0):
+    try:
+        conn = get_connection()
+        try:
+            conn.execute("""
+                UPDATE rules SET name = ?, match = ?, conditions = ?, actions = ?, continue_processing = ?
+                WHERE id = ?
+            """, (name, match, conditions_json, actions_json, int(continue_processing), rule_id))
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        logger.error("Failed to update rule %s: %s", rule_id, e)
+        raise
+
+def delete_rule(rule_id, account_id):
+    try:
+        conn = get_connection()
+        try:
+            conn.execute("DELETE FROM rules WHERE id = ? AND account_id = ?", (rule_id, account_id))
+            _renumber_rule_positions(conn, account_id)
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        logger.error("Failed to delete rule %s: %s", rule_id, e)
+        raise
+
+def move_rule_up(rule_id, account_id):
+    try:
+        conn = get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT id, position FROM rules WHERE account_id = ? ORDER BY position ASC",
+                (account_id,)
+            ).fetchall()
+            ids = [r["id"] for r in rows]
+            if rule_id not in ids:
+                return
+            idx = ids.index(rule_id)
+            if idx == 0:
+                return
+            id_above = ids[idx - 1]
+            pos_current = rows[idx]["position"]
+            pos_above = rows[idx - 1]["position"]
+            conn.execute("UPDATE rules SET position = ? WHERE id = ?", (pos_above, rule_id))
+            conn.execute("UPDATE rules SET position = ? WHERE id = ?", (pos_current, id_above))
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        logger.error("Failed to move rule %s up: %s", rule_id, e)
+        raise
+
+def move_rule_down(rule_id, account_id):
+    try:
+        conn = get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT id, position FROM rules WHERE account_id = ? ORDER BY position ASC",
+                (account_id,)
+            ).fetchall()
+            ids = [r["id"] for r in rows]
+            if rule_id not in ids:
+                return
+            idx = ids.index(rule_id)
+            if idx == len(ids) - 1:
+                return
+            id_below = ids[idx + 1]
+            pos_current = rows[idx]["position"]
+            pos_below = rows[idx + 1]["position"]
+            conn.execute("UPDATE rules SET position = ? WHERE id = ?", (pos_below, rule_id))
+            conn.execute("UPDATE rules SET position = ? WHERE id = ?", (pos_current, id_below))
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        logger.error("Failed to move rule %s down: %s", rule_id, e)
+        raise
+
+def _renumber_rule_positions(conn, account_id):
+    rows = conn.execute(
+        "SELECT id FROM rules WHERE account_id = ? ORDER BY position ASC",
+        (account_id,)
+    ).fetchall()
+    for i, row in enumerate(rows, start=1):
+        conn.execute("UPDATE rules SET position = ? WHERE id = ?", (i, row["id"]))
+
 def start_flusher():
     global _flusher_started
     with _flusher_lock:
@@ -198,8 +404,8 @@ def _flush_loop():
                 "Database flush has failed %s times in a row. Shutting down.",
                 _flush_failures
             )
-            import os, signal
-            os.kill(1, signal.SIGTERM)
+            os.kill(os.getpid(), signal.SIGTERM)
+            sys.exit(2)
 
 def _maybe_prune(conn):
     global _last_prune_time
@@ -257,11 +463,11 @@ def _flush():
         for item in emails_batch:
             conn.execute("""
                 INSERT INTO emails (
-                    id, uid, folder, sender, recipients, subject, date_received, message_size,
+                    id, account_id, uid, folder, sender, recipients, subject, date_received, message_size,
                     spam_score, rule_matched, actions, history, raw_headers, attachments,
                     processed, processed_at, processed_notes, message_id, rspamd_learned
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(uid, folder) DO UPDATE SET
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(uid, folder, account_id) DO UPDATE SET
                     sender = excluded.sender,
                     recipients = excluded.recipients,
                     subject = excluded.subject,
@@ -269,8 +475,8 @@ def _flush():
                     message_size = excluded.message_size,
                     raw_headers = excluded.raw_headers
             """, (
-                item["id"], item["uid"], item["folder"], item["sender"], item["recipients"],
-                item["subject"], item["date_received"], item["message_size"],
+                item["id"], item["account_id"], item["uid"], item["folder"], item["sender"],
+                item["recipients"], item["subject"], item["date_received"], item["message_size"],
                 item["spam_score"], item["rule_matched"], item["actions"], item["history"],
                 item["raw_headers"], item["attachments"],
                 item["processed"], item["processed_at"], item["processed_notes"],
@@ -396,10 +602,11 @@ def update_email_uid(email_id, uid):
 def enqueue_email(uid, folder, sender, recipients, subject, date_received, message_size,
                   spam_score, rule_matched, actions, raw_headers, attachments, processed,
                   processed_at, processed_notes, email_id=None, history=None,
-                  message_id=None, rspamd_learned=None):
+                  message_id=None, rspamd_learned=None, account_id=None):
     with _queue_lock:
         _email_queue.append({
             "id": email_id,
+            "account_id": account_id,
             "uid": uid,
             "folder": folder,
             "sender": sender.lower() if sender else "",
@@ -451,7 +658,7 @@ def verify():
             if version != CURRENT_VERSION:
                 raise RuntimeError(f"Database version mismatch: expected {CURRENT_VERSION}, got {version}")
 
-            expected_tables = {"emails", "logs", "config"}
+            expected_tables = {"accounts", "rules", "emails", "logs", "config"}
             rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             found_tables = {row["name"] for row in rows}
             missing = expected_tables - found_tables
@@ -465,13 +672,22 @@ def verify():
         logger.error("Database verification failed: %s", e)
         raise
 
-def get_known_uids(folder):
+def get_known_uids(folder, account_id=None):
     logger.debug("Fetching known UIDs for folder %s", folder)
 
     try:
         conn = get_connection()
         try:
-            rows = conn.execute("SELECT uid FROM emails WHERE folder = ?", (folder,)).fetchall()
+            if account_id is not None:
+                rows = conn.execute(
+                    "SELECT uid FROM emails WHERE folder = ? AND account_id = ?",
+                    (folder, account_id)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT uid FROM emails WHERE folder = ?",
+                    (folder,)
+                ).fetchall()
             known = {int(row["uid"]) for row in rows}
             logger.debug("Found %s known UID(s) in %s", len(known), folder)
             return known
@@ -482,13 +698,19 @@ def get_known_uids(folder):
         logger.error("Failed to fetch known UIDs for folder %s: %s", folder, e)
         raise
 
-def get_unprocessed_emails():
+def get_unprocessed_emails(account_id=None):
     logger.debug("Fetching unprocessed email records")
 
     try:
         conn = get_connection()
         try:
-            rows = conn.execute("SELECT * FROM emails WHERE processed = 0").fetchall()
+            if account_id is not None:
+                rows = conn.execute(
+                    "SELECT * FROM emails WHERE processed = 0 AND account_id = ?",
+                    (account_id,)
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM emails WHERE processed = 0").fetchall()
             logger.debug("Found %s unprocessed email record(s)", len(rows))
             return rows
         finally:

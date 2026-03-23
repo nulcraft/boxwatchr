@@ -1,7 +1,9 @@
-import os
-import yaml
-from flask import render_template, request, redirect, url_for, abort
+import json
+from flask import render_template, request, redirect, url_for, abort, flash
 from boxwatchr import config
+from boxwatchr import rules as _rules_engine
+from boxwatchr.database import get_rules, delete_rule, move_rule_up, move_rule_down, insert_rule
+from boxwatchr.rules import validate_rule
 from boxwatchr.web.app import app, _require_auth, _require_csrf, logger
 
 _FIELD_LABELS = {
@@ -35,82 +37,155 @@ _ACTION_LABELS = {
     "learn_ham": "Submit to rspamd as ham",
 }
 
-def _read_rules_raw():
-    if not os.path.exists(config.RULES_PATH):
-        return []
-    try:
-        with open(config.RULES_PATH, "r") as f:
-            data = yaml.safe_load(f)
-        if not data or "rules" not in data:
-            return []
-        return data["rules"] or []
-    except (OSError, yaml.YAMLError) as e:
-        logger.error("Failed to read rules file: %s", e)
-        return []
-
-class _IndentedDumper(yaml.Dumper):
-    def increase_indent(self, flow=False, indentless=False):
-        return super().increase_indent(flow=flow, indentless=False)
-
-def _write_rules_raw(raw_rules):
-    os.makedirs(os.path.dirname(config.RULES_PATH), exist_ok=True)
-    with open(config.RULES_PATH, "w") as f:
-        yaml.dump({"rules": raw_rules}, f, Dumper=_IndentedDumper,
-                  default_flow_style=False, allow_unicode=True, sort_keys=False)
 
 @app.route("/rules")
 @_require_auth
 def rules_list():
-    raw_rules = _read_rules_raw()
+    rows = get_rules(config.ACCOUNT_ID)
+    rules = []
+    export = []
+    for row in rows:
+        conditions = json.loads(row["conditions"] or "[]")
+        actions = json.loads(row["actions"] or "[]")
+        rules.append({
+            "id": row["id"],
+            "name": row["name"],
+            "match": row["match"],
+            "conditions": conditions,
+            "actions": actions,
+        })
+        export.append({
+            "name": row["name"],
+            "match": row["match"],
+            "conditions": conditions,
+            "actions": actions,
+        })
     return render_template(
         "rules.html",
-        rules=raw_rules,
+        rules=rules,
+        export_json=json.dumps(export),
         field_labels=_FIELD_LABELS,
         action_labels=_ACTION_LABELS,
         show_logout=bool(config.WEB_PASSWORD),
-        run_result=request.args.get("run_result"),
     )
 
-@app.route("/rules/<int:index>/delete", methods=["POST"])
+@app.route("/rules/<rule_id>/delete", methods=["POST"])
 @_require_auth
 @_require_csrf
-def rule_delete(index):
-    raw_rules = _read_rules_raw()
-    if index < 0 or index >= len(raw_rules):
+def rule_delete(rule_id):
+    from boxwatchr.database import get_rule
+    row = get_rule(rule_id)
+    if row is None or row["account_id"] != config.ACCOUNT_ID:
         abort(404)
-    deleted_name = raw_rules[index].get("name", "unknown")
-    raw_rules.pop(index)
+    rule_name = row["name"]
     try:
-        _write_rules_raw(raw_rules)
-        logger.info("User deleted rule '%s'", deleted_name)
-    except OSError as e:
-        logger.error("Failed to write rules file after delete: %s", e)
+        delete_rule(rule_id, config.ACCOUNT_ID)
+        _rules_engine.reload_rules()
+        logger.info("User deleted rule '%s'", rule_name)
+    except Exception as e:
+        logger.error("Failed to delete rule '%s': %s", rule_name, e)
     return redirect(url_for("rules_list"))
 
-@app.route("/rules/<int:index>/move-up", methods=["POST"])
+@app.route("/rules/<rule_id>/move-up", methods=["POST"])
 @_require_auth
 @_require_csrf
-def rule_move_up(index):
-    raw_rules = _read_rules_raw()
-    if index <= 0 or index >= len(raw_rules):
+def rule_move_up(rule_id):
+    from boxwatchr.database import get_rule
+    row = get_rule(rule_id)
+    if row is None or row["account_id"] != config.ACCOUNT_ID:
         abort(404)
-    raw_rules[index - 1], raw_rules[index] = raw_rules[index], raw_rules[index - 1]
     try:
-        _write_rules_raw(raw_rules)
-    except OSError as e:
-        logger.error("Failed to write rules file after move-up: %s", e)
+        move_rule_up(rule_id, config.ACCOUNT_ID)
+        _rules_engine.reload_rules()
+    except Exception as e:
+        logger.error("Failed to move rule up: %s", e)
     return redirect(url_for("rules_list"))
 
-@app.route("/rules/<int:index>/move-down", methods=["POST"])
+@app.route("/rules/<rule_id>/move-down", methods=["POST"])
 @_require_auth
 @_require_csrf
-def rule_move_down(index):
-    raw_rules = _read_rules_raw()
-    if index < 0 or index >= len(raw_rules) - 1:
+def rule_move_down(rule_id):
+    from boxwatchr.database import get_rule
+    row = get_rule(rule_id)
+    if row is None or row["account_id"] != config.ACCOUNT_ID:
         abort(404)
-    raw_rules[index], raw_rules[index + 1] = raw_rules[index + 1], raw_rules[index]
     try:
-        _write_rules_raw(raw_rules)
-    except OSError as e:
-        logger.error("Failed to write rules file after move-down: %s", e)
+        move_rule_down(rule_id, config.ACCOUNT_ID)
+        _rules_engine.reload_rules()
+    except Exception as e:
+        logger.error("Failed to move rule down: %s", e)
+    return redirect(url_for("rules_list"))
+
+@app.route("/rules/import", methods=["POST"])
+@_require_auth
+@_require_csrf
+def rules_import():
+    raw = request.form.get("rules_json", "").strip()
+    if not raw:
+        flash("No data provided.", "danger")
+        return redirect(url_for("rules_list"))
+
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError) as e:
+        flash("Invalid JSON: %s" % e, "danger")
+        return redirect(url_for("rules_list"))
+
+    if not isinstance(data, list):
+        flash("Expected a JSON array of rules.", "danger")
+        return redirect(url_for("rules_list"))
+
+    existing_rows = get_rules(config.ACCOUNT_ID)
+    existing_set = set()
+    for row in existing_rows:
+        key = (
+            row["name"],
+            json.dumps(json.loads(row["conditions"] or "[]"), sort_keys=True),
+            json.dumps(json.loads(row["actions"] or "[]"), sort_keys=True),
+        )
+        existing_set.add(key)
+
+    imported = 0
+    skipped = 0
+    duplicates = 0
+    for item in data:
+        if not isinstance(item, dict):
+            skipped += 1
+            continue
+        validated = validate_rule(item)
+        if validated is None:
+            skipped += 1
+            continue
+        key = (
+            validated["name"],
+            json.dumps(validated["conditions"], sort_keys=True),
+            json.dumps(validated["actions"], sort_keys=True),
+        )
+        if key in existing_set:
+            duplicates += 1
+            continue
+        try:
+            insert_rule(
+                account_id=config.ACCOUNT_ID,
+                name=validated["name"],
+                match=validated["match"],
+                conditions_json=json.dumps(validated["conditions"]),
+                actions_json=json.dumps(validated["actions"]),
+            )
+            existing_set.add(key)
+            imported += 1
+        except Exception as e:
+            logger.error("Failed to import rule '%s': %s", validated.get("name", "?"), e)
+            skipped += 1
+
+    if imported:
+        _rules_engine.reload_rules()
+        logger.info("User imported %s rule(s) (%s duplicate(s), %s skipped)", imported, duplicates, skipped)
+
+    parts = ["Imported %s rule(s)." % imported]
+    if duplicates:
+        parts.append("%s already existed and were skipped." % duplicates)
+    if skipped:
+        parts.append("%s skipped (invalid or missing required fields)." % skipped)
+    flash(" ".join(parts), "success")
     return redirect(url_for("rules_list"))

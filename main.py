@@ -10,7 +10,7 @@ from boxwatchr.web.app import start_dashboard
 from boxwatchr.imap import FatalImapError
 from boxwatchr.notes import action_sentence, failed_action_sentence, skipped_learn_sentence, build_notes_opener
 from boxwatchr.database import set_processing, clear_email_id_from_logs, enqueue_email, enqueue_email_update, get_known_uids, get_unprocessed_emails, get_email_by_message_id, update_email_uid
-from boxwatchr.rules import watch_rules, TERMINAL_ACTIONS
+from boxwatchr.rules import TERMINAL_ACTIONS
 from boxwatchr.logger import get_logger
 
 logger = get_logger("boxwatchr.main")
@@ -97,7 +97,7 @@ def startup_scan(client):
     logger.info("Scanning %s for untracked emails", config.IMAP_FOLDER)
 
     current_uids = imap.get_existing_uids(client)
-    known_uids = get_known_uids(config.IMAP_FOLDER)
+    known_uids = get_known_uids(config.IMAP_FOLDER, account_id=config.ACCOUNT_ID)
     untracked = current_uids - known_uids
 
     if not untracked:
@@ -110,7 +110,7 @@ def startup_scan(client):
         logger.debug("Startup scan: processing untracked UID %s", uid)
         try:
             message = imap.fetch_message(client, uid)
-            process_email(client, uid, message)
+            process_email(client, uid, message, current_uids=current_uids)
         except Exception as e:
             logger.error("Failed to process email UID %s during startup scan: %s", uid, e)
 
@@ -118,7 +118,7 @@ def startup_scan(client):
     return current_uids
 
 def reprocess_pending_emails(client, current_uids):
-    pending = get_unprocessed_emails()
+    pending = get_unprocessed_emails(account_id=config.ACCOUNT_ID)
     if not pending:
         logger.debug("No pending emails to reprocess")
         return
@@ -187,10 +187,17 @@ def reprocess_pending_emails(client, current_uids):
         for action in actions:
             action_type = action["type"]
             if action_type in {"learn_spam", "learn_ham"}:
-                logger.info(
-                    "Skipping %s action for pending email UID %s: raw message not stored",
-                    action_type, uid, extra={"email_id": email_id}
-                )
+                if config.DRYRUN:
+                    label = "spam" if action_type == "learn_spam" else "ham"
+                    logger.info(
+                        "DRYRUN: would submit UID %s to rspamd as %s",
+                        uid, label, extra={"email_id": email_id}
+                    )
+                else:
+                    logger.info(
+                        "Skipping %s action for pending email UID %s: raw message not stored",
+                        action_type, uid, extra={"email_id": email_id}
+                    )
                 executed.append((action, "skipped"))
                 continue
             logger.info(
@@ -248,7 +255,7 @@ def reprocess_pending_emails(client, current_uids):
 
     logger.debug("Pending email reprocessing complete")
 
-def process_email(client, uid, message):
+def process_email(client, uid, message, current_uids=None):
     email_id = None
     email_enqueued = False
     set_processing(True)
@@ -306,13 +313,22 @@ def process_email(client, uid, message):
 
         existing = get_email_by_message_id(message_id) if message_id else None
         if existing is not None:
-            logger.info(
-                "Email UID %s already tracked via Message-ID (id=%s, previous uid=%s), updating UID",
-                uid, existing["id"], existing["uid"],
-                extra={"email_id": existing["id"]}
-            )
-            email_id = existing["id"]
-            update_email_uid(email_id, str(uid))
+            clear_email_id_from_logs(email_id)
+            existing_uid = int(existing["uid"])
+            if current_uids is not None and existing_uid in current_uids:
+                logger.info(
+                    "Email UID %s is a duplicate of UID %s (same Message-ID, both present on server), skipping",
+                    uid, existing["uid"],
+                    extra={"email_id": existing["id"]}
+                )
+            else:
+                logger.info(
+                    "Email UID %s already tracked via Message-ID (id=%s, previous uid=%s), updating UID",
+                    uid, existing["id"], existing["uid"],
+                    extra={"email_id": existing["id"]}
+                )
+                email_id = existing["id"]
+                update_email_uid(email_id, str(uid))
             email_enqueued = True
             return
 
@@ -396,7 +412,7 @@ def process_email(client, uid, message):
         if actions:
             for action in actions:
                 if action["type"] in {"learn_spam", "learn_ham"}:
-                    if rspamd_learned is not None:
+                    if config.DRYRUN or rspamd_learned is not None:
                         notes_parts.append(action_sentence(action, config.DRYRUN))
                     else:
                         notes_parts.append(failed_action_sentence(action))
@@ -438,6 +454,7 @@ def process_email(client, uid, message):
             history=history,
             message_id=message_id or None,
             rspamd_learned=rspamd_learned,
+            account_id=config.ACCOUNT_ID,
         )
 
         email_enqueued = True
@@ -475,15 +492,13 @@ def main():
         logger.info("Shutting down")
         return
 
-    loaded_rules = health.load_rules_startup(config.RULES_PATH)
+    loaded_rules = health.load_rules_startup()
 
     health.start_imap(loaded_rules)
 
     _print_startup_checks(loaded_rules)
 
     health.start_monitor()
-
-    observer = watch_rules(config.RULES_PATH)
 
     logger.info("boxwatchr is running")
 
@@ -518,9 +533,6 @@ def main():
         _fatal_exit(str(e))
     except KeyboardInterrupt:
         logger.info("Shutting down")
-    finally:
-        observer.stop()
-        observer.join()
 
     logger.info("Shutdown complete")
 

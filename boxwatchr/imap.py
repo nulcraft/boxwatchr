@@ -56,7 +56,7 @@ def connect(tls_mode=None):
     logger.debug("Connecting to IMAP server %s:%s (tls_mode=%s)", config.IMAP_HOST, config.IMAP_PORT, mode)
     try:
         use_ssl = mode == "ssl"
-        client = IMAPClient(config.IMAP_HOST, port=config.IMAP_PORT, ssl=use_ssl)
+        client = IMAPClient(config.IMAP_HOST, port=config.IMAP_PORT, ssl=use_ssl, timeout=60)
         if mode == "starttls":
             client.starttls()
         logger.debug("TCP connection established to %s:%s", config.IMAP_HOST, config.IMAP_PORT)

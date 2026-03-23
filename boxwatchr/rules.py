@@ -1,13 +1,9 @@
-import os
 import re
-import time
-import yaml
+import json
 import threading
 import tldextract
 
 _tldextract = tldextract.TLDExtract(cache_dir="/app/data/tldextract")
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
 from boxwatchr.logger import get_logger
 
 logger = get_logger("boxwatchr.rules")
@@ -20,35 +16,36 @@ TERMINAL_ACTIONS = {"move"}
 _TEXT_OPERATORS = {"equals", "not_equals", "contains", "not_contains", "is_empty"}
 _NUMERIC_OPERATORS = {"greater_than", "less_than", "greater_than_or_equal", "less_than_or_equal"}
 
-def load_rules(path):
+def load_rules(account_id=None):
     global _rules
 
-    try:
-        with open(path, "r") as f:
-            data = yaml.safe_load(f)
-    except FileNotFoundError:
-        logger.error("Rules file not found at %s", path)
-        raise
-    except yaml.YAMLError as e:
-        logger.error("Failed to parse rules file: %s", e)
-        raise
+    from boxwatchr import database
+    if account_id is None:
+        from boxwatchr import config
+        account_id = config.ACCOUNT_ID
 
-    if not data or "rules" not in data or not data["rules"]:
-        logger.warning("No rules found in %s", path)
-        with _rules_lock:
-            _rules = []
-        return []
+    rows = database.get_rules(account_id)
 
     validated = []
-    for rule in data["rules"]:
-        result = validate_rule(rule)
+    for row in rows:
+        rule_dict = {
+            "name": row["name"],
+            "match": row["match"],
+            "conditions": json.loads(row["conditions"] or "[]"),
+            "actions": json.loads(row["actions"] or "[]"),
+        }
+        result = validate_rule(rule_dict)
         if result:
+            result["id"] = row["id"]
             validated.append(result)
 
     with _rules_lock:
         _rules = validated
 
     return validated
+
+def reload_rules(account_id=None):
+    return load_rules(account_id)
 
 def validate_rule(rule):
     name = rule.get("name", "").strip()
@@ -447,31 +444,3 @@ def evaluate(email, spam_score=None, email_id=None):
 
     logger.debug("Email did not match any rules", extra=extra)
     return None
-
-
-class _RulesFileHandler(FileSystemEventHandler):
-    def __init__(self, path):
-        self.path = path
-        self._last_reload = 0.0
-
-    def on_modified(self, event):
-        if os.path.abspath(event.src_path) != os.path.abspath(self.path):
-            return
-        now = time.time()
-        if now - self._last_reload < 1.0:
-            return
-        self._last_reload = now
-        logger.info("Rules file changed, reloading")
-        try:
-            loaded = load_rules(self.path)
-            logger.info("Reloaded %s valid rule(s)", len(loaded))
-        except Exception as e:
-            logger.error("Failed to reload rules: %s", e)
-
-def watch_rules(path):
-    logger.info("Watching rules file for changes: %s", path)
-    event_handler = _RulesFileHandler(path)
-    observer = Observer()
-    observer.schedule(event_handler, path=os.path.dirname(os.path.abspath(path)), recursive=False)
-    observer.start()
-    return observer

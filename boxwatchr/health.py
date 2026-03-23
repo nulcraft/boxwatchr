@@ -121,24 +121,18 @@ def initialize_database():
 
 def fatal_shutdown():
     flush_db()
-    os.kill(1, signal.SIGTERM)
+    os.kill(os.getpid(), signal.SIGTERM)
     sys.exit(2)
 
-def load_rules_startup(path):
+def load_rules_startup():
     print(_DIVIDER, flush=True)
     print("Loading rules...", flush=True)
     print(_DIVIDER, flush=True)
 
-    if not os.path.exists(path):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            f.write("rules: []\n")
-        logger.info("Created empty rules file at %s", path)
-
     try:
-        loaded_rules = _load_rules(path)
+        loaded_rules = _load_rules()
     except Exception as e:
-        logger.error("Fatal: could not load rules from %s: %s\n\nShutting down.", path, e)
+        logger.error("Fatal: could not load rules: %s\n\nShutting down.", e)
         fatal_shutdown()
 
     logger.info("Loaded %s valid rule(s)", len(loaded_rules))

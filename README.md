@@ -26,7 +26,7 @@ Think of it like email filters on steroids, with a spam engine backing up every 
 - Dashboard with stats, spam score histograms, and rule match counts
 - Full email log so you can see every message that came through and what happened to it
 - Dry run mode so you can see what boxwatchr would do before you commit to letting it run for real
-- Hot-reload for rules. Edit your rules and they take effect immediately, no restart needed.
+- Rule changes made in the dashboard take effect immediately, no restart needed.
 - Completely self-hosted. Nothing leaves your server.
 
 ---
@@ -175,19 +175,19 @@ Rules are the heart of boxwatchr. Each rule has a **name**, a **match mode** (ma
 
 Rules are evaluated in order, top to bottom. The first rule that matches an email wins. Processing stops there by default (a "continue processing" option is on the roadmap).
 
-You can create, edit, reorder, and delete rules from the **Rules** page in the dashboard. Changes take effect immediately without a restart.
+You can create, edit, reorder, and delete rules from the **Rules** page in the dashboard. Rules are stored in the database alongside everything else. Changes take effect immediately without a restart.
 
 ---
 
 ### Conditions
 
-Each condition has three parts: a `field`, an `operator`, and a `value`. The dashboard gives you friendly dropdowns for all of these, but what actually gets saved to `rules.yaml` are the values shown below.
+Each condition has three parts: a `field`, an `operator`, and a `value`. The dashboard gives you friendly dropdowns for all of these. The internal field and operator values are shown below for reference.
 
 #### Sender fields
 
 For the following examples, assume the sender address is `newsletter@mail.newsletter.example.com`.
 
-| Dashboard label | YAML `field` value | What it matches | Example |
+| Dashboard label | Field value | What it matches | Example |
 |---|---|---|---|
 | Sender: full address | `sender` | The entire address | `newsletter@mail.newsletter.example.com` |
 | Sender: local part (before @) | `sender_local` | Everything before the @ | `newsletter` |
@@ -204,14 +204,14 @@ The same six options exist for the recipient address, using `recipient` instead 
 
 #### Message fields
 
-| Dashboard label | YAML `field` value | What it matches |
+| Dashboard label | Field value | What it matches |
 |---|---|---|
 | Subject | `subject` | The email subject line |
 | Raw headers | `raw_headers` | All raw email headers (useful for `List-ID`, `X-Mailer`, etc.) |
 
 #### Attachment fields
 
-| Dashboard label | YAML `field` value | What it matches |
+| Dashboard label | Field value | What it matches |
 |---|---|---|
 | Attachment: file name | `attachment_name` | The full filename (e.g. `invoice.pdf`) |
 | Attachment: extension | `attachment_extension` | Just the extension (e.g. `pdf`, `exe`) |
@@ -219,7 +219,7 @@ The same six options exist for the recipient address, using `recipient` instead 
 
 #### Spam score
 
-| Dashboard label | YAML `field` value | What it matches |
+| Dashboard label | Field value | What it matches |
 |---|---|---|
 | rspamd score | `rspamd_score` | The numeric spam score from rspamd |
 
@@ -229,7 +229,7 @@ The same six options exist for the recipient address, using `recipient` instead 
 
 **For all text fields:**
 
-| Dashboard label | YAML `operator` value | What it does |
+| Dashboard label | Operator value | What it does |
 |---|---|---|
 | equals | `equals` | Exact match |
 | does not equal | `not_equals` | Does not exactly match |
@@ -239,7 +239,7 @@ The same six options exist for the recipient address, using `recipient` instead 
 
 **For rspamd score:**
 
-| Dashboard label | YAML `operator` value | What it does |
+| Dashboard label | Operator value | What it does |
 |---|---|---|
 | greater than | `greater_than` | Score is above the value |
 | less than | `less_than` | Score is below the value |
@@ -254,7 +254,7 @@ The same six options exist for the recipient address, using `recipient` instead 
 
 Each action has a `type`. The `move` action also requires a `destination`.
 
-| Dashboard label | YAML `type` value | What it does |
+| Dashboard label | Action type | What it does |
 |---|---|---|
 | Move to folder | `move` | Moves the email to the specified folder |
 | Mark as read | `mark_read` | Marks the email as read |
@@ -286,6 +286,26 @@ Dry Run is your safety net. When it's enabled:
 - It logs exactly what it would have done, so you can review it in the dashboard
 
 This is how you should start out. Run it in dry run mode for a day or two, watch the Emails page, and verify that your rules are matching what you expect. Once you're satisfied, turn dry run off in Config.
+
+### First-run workflow in Dry Run mode
+
+Here is the recommended order of operations when you are starting fresh with Dry Run enabled:
+
+1. **Start the container.** boxwatchr connects to your inbox, scans all existing messages, scores them with rspamd, and logs them to the database. At this point no rules exist yet, so every email is logged with "No rule matched."
+
+2. **Create your rules.** Go to the Rules page and build your rules. The emails already in the database are unaffected by this -- they were processed before the rules existed.
+
+3. **Test your rules against your existing mail.** You have two options:
+
+   - **Run Rule (easiest):** On the Rules page, click **Run Rule** on each rule in order from top to bottom. Each run evaluates that rule against every email currently in your watched folder and writes a `[DRY RUN]` note showing what would have happened. Do them in order because that is how they will run in production.
+
+   - **Restart the container:** On startup, boxwatchr automatically re-evaluates all unprocessed emails against your current rules in priority order -- exactly as the live pipeline would behave. This gives you the most realistic picture of how your rules interact with each other.
+
+4. **Review the results.** Go to the Emails page and read the notes column. Each email shows which rule matched and what action would have been taken. If something looks wrong, check the Logs page for the detailed condition trace for that email.
+
+5. **Adjust your rules and repeat** until you are happy with the results.
+
+6. **Disable Dry Run** in Config. From this point forward, boxwatchr will act on your emails for real.
 
 One important thing to know: emails that were processed in dry run mode are **not** retroactively submitted to rspamd for learning if you later turn dry run off. The raw message body isn't stored, so that ship has sailed. This is fine. Those emails will eventually cycle out of your mailbox anyway.
 
@@ -384,8 +404,8 @@ These go in `config/.env` and control container-level behavior. Everything else 
 
 boxwatchr stores everything in two folders on your host:
 
-- `config/` contains your `.env` file and, once you start creating rules, a `rules.yaml` file.
-- `data/` contains the SQLite database (`boxwatchr.db`) and Redis Bayesian data (`redis/`).
+- `config/` contains your `.env` file as well as the rspamd local.d configurations.
+- `data/` contains the SQLite database (`boxwatchr.db`) and Redis Bayesian data (`redis/`). Your rules and account settings are stored in the database alongside your email history.
 
 **Back these up.** The database has your entire email processing history. The Redis data has your Bayesian training. Losing it means rspamd starts fresh.
 

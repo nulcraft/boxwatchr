@@ -4,12 +4,58 @@
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4">
     <h1 class="h4 fw-semibold mb-0">Rules</h1>
-    <a href="/rules/new" class="btn btn-primary btn-sm">Add Rule</a>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#import-modal">Import</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#export-modal">Export</button>
+        <a href="/rules/new" class="btn btn-primary btn-sm">Add Rule</a>
+    </div>
 </div>
 
-{% if run_result %}
-<div class="alert alert-success py-2 px-3 small mb-4">{{ run_result }}</div>
-{% endif %}
+<div class="modal fade" id="export-modal" tabindex="-1" aria-labelledby="export-modal-label" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="export-modal-label">Export Rules</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-secondary mb-2">Copy the JSON below to back up your rules.</p>
+                <textarea id="export-json-text" class="form-control font-monospace small" rows="10" readonly onclick="this.select()">{{ export_json }}</textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="import-modal" tabindex="-1" aria-labelledby="import-modal-label" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="import-modal-label">Import Rules</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-secondary mb-2">Paste exported rules JSON below. Duplicates will be skipped automatically.</p>
+                <form method="post" action="/rules/import" id="import-form">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <textarea name="rules_json" class="form-control font-monospace small" rows="10" placeholder='[{"name": "My Rule", ...}]'></textarea>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="import-form" class="btn btn-primary btn-sm">Import Rules</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert alert-{{ category }} py-2 px-3 small mb-4">{{ message }}</div>
+{% endfor %}
+{% endwith %}
 
 {% if not rules %}
 <div class="card">
@@ -21,7 +67,6 @@
 {% endif %}
 
 {% for rule in rules %}
-{% set idx = loop.index0 %}
 <div class="card mb-3">
     <div class="card-body">
         <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
@@ -30,20 +75,20 @@
                 <span class="badge text-bg-secondary">match {{ rule.match or "all" }}</span>
             </div>
             <div class="d-flex gap-2 flex-shrink-0">
-                <form method="post" action="/rules/{{ idx }}/move-up">
+                <form method="post" action="/rules/{{ rule.id }}/move-up">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-secondary btn-sm" {{ 'disabled' if loop.first }}>&#8593;</button>
                 </form>
-                <form method="post" action="/rules/{{ idx }}/move-down">
+                <form method="post" action="/rules/{{ rule.id }}/move-down">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-secondary btn-sm" {{ 'disabled' if loop.last }}>&#8595;</button>
                 </form>
-                <a href="/rules/{{ idx }}/edit" class="btn btn-outline-secondary btn-sm">Edit</a>
-                <form method="post" action="/rules/{{ idx }}/run" data-rule-name="{{ rule.name }}" onsubmit="return confirm('Run the ' + this.dataset.ruleName + ' rule against all emails in your watched folder?')">
+                <a href="/rules/{{ rule.id }}/edit" class="btn btn-outline-secondary btn-sm">Edit</a>
+                <form method="post" action="/rules/{{ rule.id }}/run" data-rule-name="{{ rule.name }}" onsubmit="return confirm('Run the ' + this.dataset.ruleName + ' rule against all emails in your watched folder?')">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-primary btn-sm">Run Rule</button>
                 </form>
-                <form method="post" action="/rules/{{ idx }}/delete" data-rule-name="{{ rule.name }}" onsubmit="return confirm('Delete the ' + this.dataset.ruleName + ' rule?')">
+                <form method="post" action="/rules/{{ rule.id }}/delete" data-rule-name="{{ rule.name }}" onsubmit="return confirm('Delete the ' + this.dataset.ruleName + ' rule?')">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
                 </form>
@@ -105,4 +150,25 @@
 </div>
 {% endfor %}
 
+<div id="rule-run-overlay" class="d-none position-fixed top-0 start-0 w-100 h-100 align-items-center justify-content-center" style="background:rgba(0,0,0,0.65);z-index:9999;">
+    <div class="text-center text-white px-4">
+        <div class="spinner-border mb-3" role="status" aria-hidden="true"></div>
+        <p class="fs-6 fw-semibold mb-1">Running rule against your messages&hellip;</p>
+        <p class="small text-white-50">This may take a moment. Please do not navigate away.</p>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll("form[action*='/run']").forEach(function(form) {
+    form.addEventListener("submit", function(e) {
+        if (e.defaultPrevented) { return; }
+        var overlay = document.getElementById("rule-run-overlay");
+        overlay.classList.remove("d-none");
+        overlay.style.display = "flex";
+    });
+});
+</script>
 {% endblock %}

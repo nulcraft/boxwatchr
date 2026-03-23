@@ -1,5 +1,4 @@
 import os
-import json
 import logging
 
 # Infrastructure settings — read from environment, needed before the DB is available.
@@ -9,12 +8,12 @@ RSPAMD_PORT = 11333
 RSPAMD_CONTROLLER_PORT = 11334
 RSPAMD_PASSWORD = os.environ.get("RSPAMD_PASSWORD", "")
 
-RULES_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "rules.yaml")
-
 # App settings — defaults only. Overridden by load() after database.initialize().
 SETUP_COMPLETE = False
 
-IMAP_ACCOUNTS = []
+ACCOUNT_ID = ""
+ACCOUNT_NAME = ""
+
 IMAP_HOST = ""
 IMAP_PORT = 993
 IMAP_USERNAME = ""
@@ -29,30 +28,28 @@ WEB_PASSWORD = ""
 DB_PRUNE_DAYS = 0
 
 def load():
-    """Load app settings from the config table. Call after database.initialize()."""
-    from boxwatchr.database import get_config
+    """Load app settings from the database. Call after database.initialize()."""
+    from boxwatchr.database import get_config, get_first_account
     from boxwatchr.crypto import decrypt_password
     global SETUP_COMPLETE
-    global IMAP_ACCOUNTS, IMAP_HOST, IMAP_PORT, IMAP_USERNAME, IMAP_PASSWORD
+    global ACCOUNT_ID, ACCOUNT_NAME
+    global IMAP_HOST, IMAP_PORT, IMAP_USERNAME, IMAP_PASSWORD
     global IMAP_FOLDER, IMAP_POLL_INTERVAL, IMAP_TLS_MODE
     global LOG_LEVEL, DRYRUN, WEB_PASSWORD, DB_PRUNE_DAYS
 
     SETUP_COMPLETE = get_config("setup_complete", "false") == "true"
 
-    try:
-        IMAP_ACCOUNTS = json.loads(get_config("imap_accounts", "[]"))
-    except (json.JSONDecodeError, TypeError):
-        IMAP_ACCOUNTS = []
-
-    if IMAP_ACCOUNTS:
-        acc = IMAP_ACCOUNTS[0]
-        IMAP_HOST = acc.get("host", "")
-        IMAP_PORT = int(acc.get("port", 993))
-        IMAP_USERNAME = acc.get("username", "")
-        IMAP_PASSWORD = decrypt_password(acc.get("password", ""))
-        IMAP_FOLDER = acc.get("folder", "INBOX")
-        IMAP_POLL_INTERVAL = int(acc.get("poll_interval", 60))
-        IMAP_TLS_MODE = acc.get("tls_mode", "ssl")
+    account = get_first_account()
+    if account:
+        ACCOUNT_ID = account["id"]
+        ACCOUNT_NAME = account["name"]
+        IMAP_HOST = account["host"]
+        IMAP_PORT = int(account["port"])
+        IMAP_USERNAME = account["username"]
+        IMAP_PASSWORD = decrypt_password(account["password"])
+        IMAP_FOLDER = account["folder"]
+        IMAP_POLL_INTERVAL = int(account["poll_interval"])
+        IMAP_TLS_MODE = account["tls_mode"]
 
     LOG_LEVEL = get_config("log_level", LOG_LEVEL).upper()
     DRYRUN = get_config("dry_run", "false") == "true"

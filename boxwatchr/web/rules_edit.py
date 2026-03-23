@@ -1,13 +1,13 @@
 import json
 import sqlite3
 from datetime import datetime, timezone
-from flask import render_template, request, redirect, url_for, abort
+from flask import render_template, request, redirect, url_for, abort, flash
 from boxwatchr import config, imap, spam
-from boxwatchr.database import get_connection, enqueue_email_update
+from boxwatchr.database import get_connection, get_rule, insert_rule, update_rule, enqueue_email_update
 from boxwatchr.notes import action_sentence
-from boxwatchr.rules import validate_rule, check_rule, TERMINAL_ACTIONS
+from boxwatchr.rules import validate_rule, check_rule, reload_rules, TERMINAL_ACTIONS
 from boxwatchr.web.app import app, _require_auth, _require_csrf, _check_csrf, logger
-from boxwatchr.web.rules import _FIELD_LABELS, _ACTION_LABELS, _read_rules_raw, _write_rules_raw
+from boxwatchr.web.rules import _FIELD_LABELS, _ACTION_LABELS
 
 
 def _parse_rule_form(form):
@@ -53,14 +53,19 @@ def rule_new():
         if validated is None:
             error = "Rule is invalid. Check that all fields are filled in correctly and try again."
         else:
-            raw_rules = _read_rules_raw()
-            raw_rules.append(validated)
             try:
-                _write_rules_raw(raw_rules)
+                insert_rule(
+                    account_id=config.ACCOUNT_ID,
+                    name=validated["name"],
+                    match=validated["match"],
+                    conditions_json=json.dumps(validated["conditions"]),
+                    actions_json=json.dumps(validated["actions"]),
+                )
+                reload_rules()
                 logger.info("User created rule '%s'", validated["name"])
                 return redirect(url_for("rules_list"))
-            except OSError as e:
-                error = "Failed to save rules file: %s" % e
+            except Exception as e:
+                error = "Failed to save rule: %s" % e
 
     return render_template(
         "rules_edit.html",
@@ -74,36 +79,49 @@ def rule_new():
         show_logout=bool(config.WEB_PASSWORD),
     )
 
-@app.route("/rules/<int:index>/edit", methods=["GET", "POST"])
+@app.route("/rules/<rule_id>/edit", methods=["GET", "POST"])
 @_require_auth
-def rule_edit(index):
-    raw_rules = _read_rules_raw()
-    if index < 0 or index >= len(raw_rules):
+def rule_edit(rule_id):
+    row = get_rule(rule_id)
+    if row is None or row["account_id"] != config.ACCOUNT_ID:
         abort(404)
 
     error = None
-    rule = raw_rules[index]
+    rule = {
+        "id": row["id"],
+        "name": row["name"],
+        "match": row["match"],
+        "conditions": json.loads(row["conditions"] or "[]"),
+        "actions": json.loads(row["actions"] or "[]"),
+    }
     folders = imap.get_folder_list()
 
     if request.method == "POST":
         _check_csrf()
         rule = _parse_rule_form(request.form)
+        rule["id"] = rule_id
         validated = validate_rule(rule)
         if validated is None:
             error = "Rule is invalid. Check that all fields are filled in correctly and try again."
         else:
-            raw_rules[index] = validated
             try:
-                _write_rules_raw(raw_rules)
+                update_rule(
+                    rule_id=rule_id,
+                    name=validated["name"],
+                    match=validated["match"],
+                    conditions_json=json.dumps(validated["conditions"]),
+                    actions_json=json.dumps(validated["actions"]),
+                )
+                reload_rules()
                 logger.info("User updated rule '%s'", validated["name"])
                 return redirect(url_for("rules_list"))
-            except OSError as e:
-                error = "Failed to save rules file: %s" % e
+            except Exception as e:
+                error = "Failed to save rule: %s" % e
 
     return render_template(
         "rules_edit.html",
         rule=rule,
-        form_action=url_for("rule_edit", index=index),
+        form_action=url_for("rule_edit", rule_id=rule_id),
         page_title="Edit Rule",
         error=error,
         folders=folders,
@@ -112,15 +130,21 @@ def rule_edit(index):
         show_logout=bool(config.WEB_PASSWORD),
     )
 
-@app.route("/rules/<int:index>/run", methods=["POST"])
+@app.route("/rules/<rule_id>/run", methods=["POST"])
 @_require_auth
 @_require_csrf
-def rule_run(index):
-    raw_rules = _read_rules_raw()
-    if index < 0 or index >= len(raw_rules):
+def rule_run(rule_id):
+    row = get_rule(rule_id)
+    if row is None or row["account_id"] != config.ACCOUNT_ID:
         abort(404)
 
-    rule = validate_rule(raw_rules[index])
+    rule_dict = {
+        "name": row["name"],
+        "match": row["match"],
+        "conditions": json.loads(row["conditions"] or "[]"),
+        "actions": json.loads(row["actions"] or "[]"),
+    }
+    rule = validate_rule(rule_dict)
     if rule is None:
         return redirect(url_for("rules_list"))
 
@@ -134,7 +158,8 @@ def rule_run(index):
         conn = get_connection()
         try:
             rows = conn.execute(
-                "SELECT * FROM emails WHERE folder = ?", (config.IMAP_FOLDER,)
+                "SELECT * FROM emails WHERE folder = ? AND account_id = ?",
+                (config.IMAP_FOLDER, config.ACCOUNT_ID)
             ).fetchall()
         except sqlite3.Error as e:
             logger.error("Rule run: failed to query emails: %s", e)
@@ -147,7 +172,8 @@ def rule_run(index):
 
     if not rows:
         logger.debug("Rule run: no emails in database for folder %s", config.IMAP_FOLDER)
-        return redirect(url_for("rules_list", run_result="Rule '%s' ran: no emails in database." % rule["name"]))
+        flash("Rule '%s' ran: no emails in database." % rule["name"], "success")
+        return redirect(url_for("rules_list"))
 
     logger.debug("Rule run: evaluating %s email(s) against rule '%s'", len(rows), rule["name"])
 
@@ -165,23 +191,23 @@ def rule_run(index):
             logger.debug("Rule run: %s UID(s) currently in %s", len(current_uids), config.IMAP_FOLDER)
             processed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
-            for row in rows:
-                uid = int(row["uid"])
-                email_id = row["id"]
+            for email_row in rows:
+                uid = int(email_row["uid"])
+                email_id = email_row["id"]
 
                 if uid not in current_uids:
                     logger.debug("Rule run: UID %s not in current folder, skipping", uid)
                     continue
 
                 email_data = {
-                    "sender": row["sender"] or "",
-                    "subject": row["subject"] or "",
-                    "recipients": [r for r in (row["recipients"] or "").split(",") if r],
-                    "raw_headers": row["raw_headers"] or "",
-                    "attachments": json.loads(row["attachments"] or "[]"),
+                    "sender": email_row["sender"] or "",
+                    "subject": email_row["subject"] or "",
+                    "recipients": [r for r in (email_row["recipients"] or "").split(",") if r],
+                    "raw_headers": email_row["raw_headers"] or "",
+                    "attachments": json.loads(email_row["attachments"] or "[]"),
                 }
 
-                if not check_rule(rule, email_data, spam_score=row["spam_score"], email_id=email_id):
+                if not check_rule(rule, email_data, spam_score=email_row["spam_score"], email_id=email_id):
                     logger.debug("Rule run: UID %s did not match rule '%s'", uid, rule["name"])
                     continue
 
@@ -274,7 +300,7 @@ def rule_run(index):
                 for a in executed:
                     notes_parts.append(action_sentence(a, config.DRYRUN))
 
-                history = json.loads(row["history"] or "[]")
+                history = json.loads(email_row["history"] or "[]")
                 new_entries = []
                 if not config.DRYRUN:
                     new_entries = [
@@ -306,12 +332,8 @@ def rule_run(index):
 
     if config.DRYRUN:
         logger.info("Rule '%s' run manually (DRYRUN): %s matched, %s action(s) would have been taken", rule["name"], matched, would_have_actioned)
-        return redirect(url_for(
-            "rules_list",
-            run_result="[DRY RUN] Rule '%s' ran: %s email(s) matched, %s action(s) would have been taken." % (rule["name"], matched, would_have_actioned)
-        ))
-    logger.info("Rule '%s' run manually: %s matched, %s action(s) taken", rule["name"], matched, actioned)
-    return redirect(url_for(
-        "rules_list",
-        run_result="Rule '%s' ran: %s email(s) matched, %s action(s) taken." % (rule["name"], matched, actioned)
-    ))
+        flash("[DRY RUN] Rule '%s' ran: %s email(s) matched, %s action(s) would have been taken." % (rule["name"], matched, would_have_actioned), "success")
+    else:
+        logger.info("Rule '%s' run manually: %s matched, %s action(s) taken", rule["name"], matched, actioned)
+        flash("Rule '%s' ran: %s email(s) matched, %s action(s) taken." % (rule["name"], matched, actioned), "success")
+    return redirect(url_for("rules_list"))
