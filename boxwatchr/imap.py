@@ -7,7 +7,8 @@ from boxwatchr.logger import get_logger
 
 logger = get_logger("boxwatchr.imap")
 
-IDLE_TIMEOUT = 1740  # 29 minutes -- RFC 2177 recommended maximum before server-side timeout (typically 30m)
+IDLE_TIMEOUT = 1740  # 29 minutes, RFC 2177 recommended maximum before server-side timeout (typically 30m)
+RESCAN_INTERVAL = 300  # 5 minutes
 
 _stop_event = threading.Event()
 _reconnect_event = threading.Event()
@@ -118,7 +119,7 @@ def get_existing_uids(client):
         logger.error("Failed to fetch existing UIDs: %s", e)
         raise
 
-def watch(callback):
+def watch(callback, rescan_callback=None):
     _reconnect_event.clear()
     client = connect()
     select_folder(client)
@@ -128,7 +129,7 @@ def watch(callback):
     try:
         if client.has_capability("IDLE"):
             logger.info("IMAP IDLE is supported, using push notifications")
-            _watch_idle(client, known_uids, callback)
+            _watch_idle(client, known_uids, callback, rescan_callback=rescan_callback)
         else:
             logger.warning("IMAP IDLE is not supported, falling back to polling every %s seconds", config.IMAP_POLL_INTERVAL)
             _watch_poll(client, known_uids, callback)
@@ -138,7 +139,8 @@ def watch(callback):
         except Exception:
             pass
 
-def _watch_idle(client, known_uids, callback):
+def _watch_idle(client, known_uids, callback, rescan_callback=None):
+    last_rescan = time.monotonic()
     while not _stop_event.is_set() and not _reconnect_event.is_set():
         idle_started = False
         try:
@@ -147,9 +149,13 @@ def _watch_idle(client, known_uids, callback):
             idle_started = True
 
             responses = []
+            rescan_due = False
             deadline = time.monotonic() + IDLE_TIMEOUT
             while time.monotonic() < deadline:
                 if _stop_event.is_set() or _reconnect_event.is_set():
+                    break
+                if rescan_callback and time.monotonic() - last_rescan >= RESCAN_INTERVAL:
+                    rescan_due = True
                     break
                 chunk = client.idle_check(timeout=1)
                 if chunk:
@@ -164,6 +170,12 @@ def _watch_idle(client, known_uids, callback):
 
             if _stop_event.is_set() or _reconnect_event.is_set():
                 break
+
+            if rescan_due:
+                logger.info("Running periodic rescan of %s", config.IMAP_FOLDER)
+                rescan_callback(client)
+                last_rescan = time.monotonic()
+                continue
 
             if responses:
                 current_uids = get_existing_uids(client)

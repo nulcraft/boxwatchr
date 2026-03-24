@@ -6,6 +6,8 @@ Self-hosted IMAP email filtering daemon. Single Docker container with supervisor
 - [ ] **rspamd error**: "Cannot receive neighbours data: Network error" on `local/neighbours` (benign or not?)
 
 ### Roadmap Changes & Implementations
+- [x] **Periodic rescan** to catch emails missed by IMAP IDLE
+    - Implemented as a 5-minute interval inside the IDLE loop. The IDLE session terminates early when the interval is due, `startup_scan()` runs against the DB, then IDLE resumes. Polling mode does not need this since it already catches missed messages on the next cycle.
 - [ ] **Support multiple IMAP accounts**
     - [ ] Rules should be associated to IMAP account custom ID
     - [ ] "IMAP Account" drop-down on the following pages, with the first account created as the default selected/populated on page loads:
