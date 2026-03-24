@@ -83,11 +83,11 @@ In your `boxwatchr` folder (not inside `config` or `data`, one level up), create
 ```yaml
 services:
   boxwatchr:
-    image: nulcraft/boxwatchr:latest
+    image: ghcr.io/nulcraft/boxwatchr:latest
     container_name: boxwatchr
     restart: on-failure
     ports:
-      - "${WEB_PORT:-8143}:80"
+      - "8143:80"
       - "11334:11334"
     volumes:
       - ./config:/app/config
@@ -104,7 +104,9 @@ Your folder structure should now look like this:
 boxwatchr/
 ├── docker-compose.yml
 ├── config/
-│   └── .env
+│   ├── .env
+│   └── rspamd/
+│       └── local.d/    (optional rspamd config overrides)
 └── data/          (this will fill up automatically)
 ```
 
@@ -404,7 +406,7 @@ These go in `config/.env` and control container-level behavior. Everything else 
 
 boxwatchr stores everything in two folders on your host:
 
-- `config/` contains your `.env` file as well as the rspamd local.d configurations.
+- `config/` contains your `.env` file and `rspamd/local.d/` (a folder for custom rspamd config overrides). A `greylist.conf` is included that disables rspamd greylisting. Leave it alone. You can add other `.conf` files to override rspamd defaults, but no additional overrides have been tested with boxwatchr. Incorrect rspamd configuration can affect scoring, Bayesian learning, or cause rspamd to fail at startup. Proceed with caution.
 - `data/` contains the SQLite database (`boxwatchr.db`) and Redis Bayesian data (`redis/`). Your rules and account settings are stored in the database alongside your email history.
 
 **Back these up.** The database has your entire email processing history. The Redis data has your Bayesian training. Losing it means rspamd starts fresh.

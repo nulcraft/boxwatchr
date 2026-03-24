@@ -4,7 +4,7 @@ services:
     container_name: boxwatchr
     restart: on-failure
     ports:
-      - "${WEB_PORT:-8143}:80"
+      - "8143:80"
       - "11334:11334"
     volumes:
       - ./config:/app/config
