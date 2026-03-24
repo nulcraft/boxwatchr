@@ -51,6 +51,10 @@ password = "$RSPAMD_HASH";
 bind_socket = "*:11334";
 EOF
 
+cat > /etc/rspamd/local.d/greylist.conf << 'EOF'
+enabled = false;
+EOF
+
 if [ -d "/app/config/rspamd/local.d" ]; then
     cp /app/config/rspamd/local.d/* /etc/rspamd/local.d/ 2>/dev/null || true
 fi
