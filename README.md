@@ -72,7 +72,7 @@ uid=1000(youruser) gid=1000(youruser) groups=...
 
 Set `PUID=1000` and `PGID=1000` (or whatever your actual IDs are).
 
-**TZ** is your timezone in standard format, like `America/New_York`, `Europe/London`, or `Australia/Sydney`. This affects how timestamps appear in the dashboard. Set it once and leave it. Changing it after the fact will make your old log entries appear out of order.
+**TZ** is your timezone in standard format, like `America/New_York`, `Europe/London`, or `Australia/Sydney`. All timestamps are stored in UTC and converted to your timezone for display, so you can change this at any time without affecting your data.
 
 **RSPAMD_PASSWORD** is for the rspamd web interface on port 11334. If you leave this blank, boxwatchr generates a random password at every startup. If you want to actually log into the rspamd interface, set a password here so it stays the same between restarts. This field is completely optional and doesn't need to be in your .env file at all.
 
@@ -132,7 +132,7 @@ The setup wizard walks you through everything the first time. You only do this o
 
 ### IMAP credentials
 
-- **Account Name:** Just a label for yourself, like "Gmail" or "Work Email"
+- **Account Name:** Just a label for yourself, like "Gmail" or "Work Email" (I like to use my email address here)
 - **IMAP Host:** Your mail server's IMAP address (e.g. `imap.gmail.com`, `imap.fastmail.com`)
 - **Port:** Almost always `993` for SSL, `143` for STARTTLS or plain
 - **TLS Mode:** Choose `SSL` (the default, most secure), `STARTTLS`, or `None` (not recommended unless you know what you're doing)
@@ -149,7 +149,7 @@ This is the folder boxwatchr monitors for new messages. Usually this is `INBOX`.
 
 **Log Level** controls how much detail shows up in the system logs. `INFO` is the right choice for most people. `DEBUG` is very noisy. Only use it if something is broken and you're trying to figure out why.
 
-**Log Retention** is how many days of log entries to keep. Logs are stored in the SQLite database on your server. Set `0` to keep everything forever, or enter a number like `30` to automatically clean up entries older than 30 days.
+**Log Retention** is how many days of log entries to keep. Logs are stored in the SQLite database on your server. Set `0` to keep everything forever, or enter a number like `7` to automatically clean up entries older than 1 week. Word of warning: the logs table can grow to be HUGE. You've been warned. Prune often if necessary.
 
 **Dry Run:** Leave this alone for now. This is one of the most important features to understand, and it's covered in detail below. The short version is that when dry run is on, boxwatchr runs your rules and tells you what it would do, but doesn't actually move or modify any emails. Use this to make sure your rules are right before letting it loose.
 
@@ -158,16 +158,6 @@ This is the folder boxwatchr monitors for new messages. Usually this is `INBOX`.
 Optional, but recommended if your dashboard is accessible over a network. Leave it blank if you're behind a reverse proxy that handles authentication, or if you're the only one who can reach it.
 
 Click **Save** to complete setup. You will need to restart your container with `docker compose restart` and once it's back up and running, boxwatchr will start monitoring your mailbox.
-
----
-
-## Configuration
-
-After setup, you can change any of these settings at any time from the **Config** page in the dashboard. Changes take effect immediately. The IMAP connection will reconnect automatically if you change the server credentials.
-
-### Re-running setup
-
-There's no "re-run setup" button, but the Config page has all the same fields. Just go there to make changes.
 
 ---
 
@@ -200,7 +190,7 @@ For the following examples, assume the sender address is `newsletter@mail.newsle
 
 #### Recipient fields
 
-The same six options exist for the recipient address, using `recipient` instead of `sender` in the YAML field name:
+The same six options exist for the recipient address, using `recipient` instead of `sender` in the drowndown:
 
 `recipient`, `recipient_local`, `recipient_domain`, `recipient_domain_name`, `recipient_domain_root`, `recipient_domain_tld`
 
@@ -370,6 +360,12 @@ Create, edit, delete, and reorder your rules. The order matters. Rules are evalu
 
 System logs, newest first. Filterable by log level and date range. Useful for debugging if something isn't behaving the way you expect.
 
+### Config
+
+Change any of your account and application settings here. All changes take effect immediately without restarting the container. If you change the IMAP credentials or watch folder, the connection reconnects automatically. If you change the web password, you are logged out immediately.
+
+There is no "re-run setup" button. The Config page has all the same fields as the setup wizard.
+
 ---
 
 ## Ports reference
@@ -385,7 +381,7 @@ System logs, newest first. Filterable by log level and date range. Useful for de
 
 The rspamd controller is exposed on port 11334. This is an optional extra. You don't need it to use boxwatchr, but it lets you dig into rspamd directly if you're curious or debugging.
 
-If you set `RSPAMD_PASSWORD` in your `.env`, use that password to log in. If you didn't set one, a random password was generated at startup and you won't be able to log in to the web interface. boxwatchr still talks to rspamd internally just fine either way.
+If you set `RSPAMD_PASSWORD` in your `.env`, use that password to log in. If you didn't set one, boxwatchr generated a random password at startup and printed it to the container logs. Run `docker compose logs boxwatchr | grep "rspamd web interface"` to find it. The password changes every restart, so set one in your `.env` if you want consistent access. boxwatchr still talks to rspamd internally either way.
 
 ---
 
@@ -397,7 +393,7 @@ These go in `config/.env` and control container-level behavior. Everything else 
 |---|---|---|
 | `PUID` | `99` | User ID to run as inside the container |
 | `PGID` | `100` | Group ID to run as inside the container |
-| `TZ` | `UTC` | Timezone for log timestamps |
+| `TZ` | `UTC` | Timezone used for display. Logs are stored in UTC and converted at render time. |
 | `RSPAMD_PASSWORD` | *(random)* | Password for the rspamd web interface on port 11334. Randomized at startup if not set. |
 
 ---
@@ -406,7 +402,7 @@ These go in `config/.env` and control container-level behavior. Everything else 
 
 boxwatchr stores everything in two folders on your host:
 
-- `config/` contains your `.env` file and `rspamd/local.d/` (a folder for custom rspamd config overrides). A `greylist.conf` is included that disables rspamd greylisting. Leave it alone. You can add other `.conf` files to override rspamd defaults, but no additional overrides have been tested with boxwatchr. Incorrect rspamd configuration can affect scoring, Bayesian learning, or cause rspamd to fail at startup. Proceed with caution.
+- `config/` contains your `.env` file. You can optionally create `rspamd/local.d/` and place `.conf` files there to override rspamd defaults, but no additional overrides have been tested with boxwatchr. Incorrect rspamd configuration can affect scoring, Bayesian learning, or cause rspamd to fail at startup. Proceed with caution.
 - `data/` contains the SQLite database (`boxwatchr.db`) and Redis Bayesian data (`redis/`). Your rules and account settings are stored in the database alongside your email history.
 
 **Back these up.** The database has your entire email processing history. The Redis data has your Bayesian training. Losing it means rspamd starts fresh.
@@ -450,3 +446,15 @@ Stop the container, open the database file at `data/boxwatchr.db` with any SQLit
 boxwatchr stores your IMAP password encrypted in the database. It's not stored in plain text. The encryption key is stored in `data/secret.key` on your server, so anyone with full access to your server could theoretically recover it. Use this on a server you control and trust.
 
 The rspamd HTTP connection is intentionally plain HTTP on localhost. There's no need for TLS when both services are on the same machine.
+
+### Reverse proxy
+
+Running boxwatchr behind a reverse proxy is strongly recommended if your dashboard is reachable from outside your home network. A reverse proxy lets you:
+
+- Serve the dashboard over HTTPS with a real certificate (e.g. `https://boxwatchr.example.com`)
+- Use your own domain instead of a raw IP address and port
+- Add HTTP basic authentication at the proxy level as an extra layer on top of (or instead of) the built-in web password
+
+Popular options include Nginx Proxy Manager, Caddy, Traefik, and nginx. Setup varies by choice and is outside the scope of this documentation.
+
+One note on authentication: if you use a reverse proxy project that supports single sign-on (SSO) or identity-aware proxy features, passing those authentication headers through to boxwatchr has not been tested. The built-in web password is the supported authentication method.
