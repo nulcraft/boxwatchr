@@ -25,8 +25,8 @@ Self-hosted IMAP email filtering daemon. Single Docker container with supervisor
         - `logs` table retains all records, but /logs page no longer includes ability to select previous IMAP account for filtering
 - [ ] "**Continue After Match** / **Stop After Match**" flags
     - Add per-rule "Continue After Match" vs "Stop After Match" select. Default is to Stop After Match. This will allow chaining rules, such as having a "Learn Ham" rule that then falls through to the next rule. Rule order will be important.
-- [ ] **aiosqlite implementation** from 'https://github.com/omnilib/aiosqlite' (`pip install aiosqlite`) and completely revamping all interactions with the database
-- [ ] **Investigate better async threading** for multiple IMAP accounts/database calls/anything that needs threading
+- [ ] **Reduce database.py connection boilerplate** with a context manager. Every read function repeats the same `conn = get_connection() / try / finally conn.close()` pattern ~20 times. A `with get_connection() as conn:` pattern via a `contextmanager` helper would eliminate the repetition with no dependency changes and no architecture changes.
+- [ ] **Investigate threading model for multiple IMAP accounts.** One watch thread per account is the goal. Evaluate whether the current thread-per-account approach is sufficient or whether a more structured concurrency model is needed before implementing multi-account support.
 
 ## Completed Tasks
 

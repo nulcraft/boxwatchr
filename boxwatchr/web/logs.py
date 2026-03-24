@@ -1,7 +1,7 @@
 import sqlite3
 from flask import render_template, request
 from boxwatchr import config
-from boxwatchr.database import get_connection
+from boxwatchr.database import db_connection
 from boxwatchr.web.app import app, _require_auth, _LEVELS, _LOGS_PAGE_SIZE, _local_date_to_utc, logger
 
 @app.route("/logs")
@@ -36,21 +36,19 @@ def system_logs():
     where_sql = "WHERE " + " AND ".join(where_clauses)
     offset = (page - 1) * _LOGS_PAGE_SIZE
 
-    conn = get_connection()
     try:
-        total = conn.execute("SELECT COUNT(*) FROM logs %s" % where_sql, params).fetchone()[0]
-        rows = conn.execute(
-            """SELECT id, level, logger_name, message, logged_at, email_id
-               FROM logs %s
-               ORDER BY logged_at DESC
-               LIMIT ? OFFSET ?""" % where_sql,
-            params + [_LOGS_PAGE_SIZE, offset]
-        ).fetchall()
+        with db_connection() as conn:
+            total = conn.execute("SELECT COUNT(*) FROM logs %s" % where_sql, params).fetchone()[0]
+            rows = conn.execute(
+                """SELECT id, level, logger_name, message, logged_at, email_id
+                   FROM logs %s
+                   ORDER BY logged_at DESC
+                   LIMIT ? OFFSET ?""" % where_sql,
+                params + [_LOGS_PAGE_SIZE, offset]
+            ).fetchall()
     except sqlite3.Error as e:
         logger.error("Failed to query system logs (page=%s): %s", page, e)
         raise
-    finally:
-        conn.close()
 
     total_pages = max(1, (total + _LOGS_PAGE_SIZE - 1) // _LOGS_PAGE_SIZE)
 

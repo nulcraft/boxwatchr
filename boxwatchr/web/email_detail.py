@@ -2,34 +2,32 @@ import json
 import sqlite3
 from flask import render_template, abort
 from boxwatchr import config
-from boxwatchr.database import get_connection
+from boxwatchr.database import db_connection
 from boxwatchr.web.app import app, _require_auth, _score_class, logger
 
 
 @app.route("/emails/<email_id>")
 @_require_auth
 def email_detail(email_id):
-    conn = get_connection()
     try:
-        row = conn.execute(
-            "SELECT * FROM emails WHERE id = ?", (email_id,)
-        ).fetchone()
+        with db_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM emails WHERE id = ?", (email_id,)
+            ).fetchone()
 
-        if row is None:
-            abort(404)
+            if row is None:
+                abort(404)
 
-        log_rows = conn.execute(
-            """SELECT level, logger_name, message, logged_at
-               FROM logs
-               WHERE email_id = ?
-               ORDER BY logged_at ASC""",
-            (email_id,)
-        ).fetchall()
+            log_rows = conn.execute(
+                """SELECT level, logger_name, message, logged_at
+                   FROM logs
+                   WHERE email_id = ?
+                   ORDER BY logged_at ASC""",
+                (email_id,)
+            ).fetchall()
     except sqlite3.Error as e:
         logger.error("Failed to query email detail for %s: %s", email_id, e)
         raise
-    finally:
-        conn.close()
 
     actions = json.loads(row["actions"] or "[]")
     attachments = json.loads(row["attachments"] or "[]")

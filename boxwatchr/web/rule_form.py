@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime, timezone
 from flask import render_template, request, redirect, url_for, abort, flash
 from boxwatchr import config, imap, spam
-from boxwatchr.database import get_connection, get_rule, insert_rule, update_rule, enqueue_email_update
+from boxwatchr.database import db_connection, get_rule, insert_rule, update_rule, enqueue_email_update
 from boxwatchr.notes import action_sentence
 from boxwatchr.rules import validate_rule, check_rule, reload_rules, TERMINAL_ACTIONS
 from boxwatchr.web.app import app, _require_auth, _require_csrf, _check_csrf, logger
@@ -153,18 +153,12 @@ def rule_run(rule_id):
     would_have_actioned = 0
 
     try:
-        conn = get_connection()
-        try:
+        with db_connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM emails WHERE folder = ? AND account_id = ?",
                 (config.IMAP_FOLDER, config.ACCOUNT_ID)
             ).fetchall()
-        except sqlite3.Error as e:
-            logger.error("Rule run: failed to query emails: %s", e)
-            raise
-        finally:
-            conn.close()
-    except Exception as e:
+    except sqlite3.Error as e:
         logger.error("Rule run: database error for rule '%s': %s", rule["name"], e)
         return redirect(url_for("rules_list"))
 

@@ -7,6 +7,7 @@ import time
 import json
 import threading
 import collections
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from boxwatchr import config
 from boxwatchr.logger import get_logger
@@ -41,6 +42,16 @@ def get_connection():
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
     return conn
+
+@contextmanager
+def _db():
+    conn = get_connection()
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+db_connection = _db
 
 def _get_version(conn):
     return conn.execute("PRAGMA user_version").fetchone()[0]
@@ -137,68 +148,54 @@ def initialize():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
     try:
-        conn = get_connection()
-    except sqlite3.Error as e:
-        logger.error("Failed to initialize database: %s", e)
-        raise
+        with _db() as conn:
+            current_version = _get_version(conn)
 
-    try:
-        current_version = _get_version(conn)
+            if current_version == CURRENT_VERSION:
+                return
 
-        if current_version == CURRENT_VERSION:
-            return
+            if current_version > CURRENT_VERSION:
+                logger.error(
+                    "Database version %s is newer than the application expects (%s). "
+                    "Please update boxwatchr.",
+                    current_version, CURRENT_VERSION
+                )
+                raise RuntimeError("Database version is newer than the application supports")
 
-        if current_version > CURRENT_VERSION:
-            logger.error(
-                "Database version %s is newer than the application expects (%s). "
-                "Please update boxwatchr.",
-                current_version, CURRENT_VERSION
-            )
-            raise RuntimeError("Database version is newer than the application supports")
-
-        _create_schema(conn)
-        _set_version(conn, CURRENT_VERSION)
-        conn.commit()
-        logger.info("Database initialized at version %s", CURRENT_VERSION)
+            _create_schema(conn)
+            _set_version(conn, CURRENT_VERSION)
+            conn.commit()
+            logger.info("Database initialized at version %s", CURRENT_VERSION)
 
     except sqlite3.Error as e:
         logger.error("Failed to initialize database: %s", e)
         raise
-    finally:
-        conn.close()
 
 def get_config(key, default=None):
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             row = conn.execute("SELECT value FROM config WHERE key = ?", (key,)).fetchone()
             return row["value"] if row else default
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to read config key %r: %s", key, e)
         return default
 
 def set_config(key, value):
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             conn.execute(
                 "INSERT INTO config (key, value) VALUES (?, ?) "
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (key, str(value))
             )
             conn.commit()
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to write config key %r: %s", key, e)
         raise
 
 def bulk_set_config(items_dict):
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             for key, value in items_dict.items():
                 conn.execute(
                     "INSERT INTO config (key, value) VALUES (?, ?) "
@@ -206,19 +203,14 @@ def bulk_set_config(items_dict):
                     (key, str(value))
                 )
             conn.commit()
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to bulk-write config: %s", e)
         raise
 
 def get_first_account():
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             return conn.execute("SELECT * FROM accounts LIMIT 1").fetchone()
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to fetch account: %s", e)
         return None
@@ -226,8 +218,7 @@ def get_first_account():
 def upsert_account(account_id, name, host, port, username, password, folder, poll_interval, tls_mode):
     created_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             conn.execute("""
                 INSERT INTO accounts (id, name, host, port, username, password, folder, poll_interval, tls_mode, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -242,34 +233,26 @@ def upsert_account(account_id, name, host, port, username, password, folder, pol
                     tls_mode = excluded.tls_mode
             """, (account_id, name, host, port, username, password, folder, poll_interval, tls_mode, created_at))
             conn.commit()
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to upsert account: %s", e)
         raise
 
 def get_rules(account_id):
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             rows = conn.execute(
                 "SELECT * FROM rules WHERE account_id = ? ORDER BY position ASC",
                 (account_id,)
             ).fetchall()
             return rows
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to fetch rules for account %s: %s", account_id, e)
         return []
 
 def get_rule(rule_id):
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             return conn.execute("SELECT * FROM rules WHERE id = ?", (rule_id,)).fetchone()
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to fetch rule %s: %s", rule_id, e)
         return None
@@ -277,8 +260,7 @@ def get_rule(rule_id):
 def insert_rule(account_id, name, match, conditions_json, actions_json, continue_processing=0):
     rule_id = str(uuid.uuid4())
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             row = conn.execute(
                 "SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM rules WHERE account_id = ?",
                 (account_id,)
@@ -289,8 +271,6 @@ def insert_rule(account_id, name, match, conditions_json, actions_json, continue
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (rule_id, account_id, position, name, match, conditions_json, actions_json, int(continue_processing)))
             conn.commit()
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to insert rule: %s", e)
         raise
@@ -298,36 +278,29 @@ def insert_rule(account_id, name, match, conditions_json, actions_json, continue
 
 def update_rule(rule_id, name, match, conditions_json, actions_json, continue_processing=0):
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             conn.execute("""
                 UPDATE rules SET name = ?, match = ?, conditions = ?, actions = ?, continue_processing = ?
                 WHERE id = ?
             """, (name, match, conditions_json, actions_json, int(continue_processing), rule_id))
             conn.commit()
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to update rule %s: %s", rule_id, e)
         raise
 
 def delete_rule(rule_id, account_id):
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             conn.execute("DELETE FROM rules WHERE id = ? AND account_id = ?", (rule_id, account_id))
             _renumber_rule_positions(conn, account_id)
             conn.commit()
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to delete rule %s: %s", rule_id, e)
         raise
 
 def move_rule_up(rule_id, account_id):
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             rows = conn.execute(
                 "SELECT id, position FROM rules WHERE account_id = ? ORDER BY position ASC",
                 (account_id,)
@@ -344,16 +317,13 @@ def move_rule_up(rule_id, account_id):
             conn.execute("UPDATE rules SET position = ? WHERE id = ?", (pos_above, rule_id))
             conn.execute("UPDATE rules SET position = ? WHERE id = ?", (pos_current, id_above))
             conn.commit()
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to move rule %s up: %s", rule_id, e)
         raise
 
 def move_rule_down(rule_id, account_id):
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             rows = conn.execute(
                 "SELECT id, position FROM rules WHERE account_id = ? ORDER BY position ASC",
                 (account_id,)
@@ -370,8 +340,6 @@ def move_rule_down(rule_id, account_id):
             conn.execute("UPDATE rules SET position = ? WHERE id = ?", (pos_below, rule_id))
             conn.execute("UPDATE rules SET position = ? WHERE id = ?", (pos_current, id_below))
             conn.commit()
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to move rule %s down: %s", rule_id, e)
         raise
@@ -572,32 +540,24 @@ def get_email_by_message_id(message_id):
     if not message_id:
         return None
     try:
-        conn = get_connection()
-        try:
-            row = conn.execute(
+        with _db() as conn:
+            return conn.execute(
                 "SELECT * FROM emails WHERE message_id = ?",
                 (message_id,)
             ).fetchone()
-            return row
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to query email by message_id: %s", e)
         return None
 
 def update_email_uid(email_id, uid):
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             conn.execute("UPDATE emails SET uid = ? WHERE id = ?", (uid, email_id))
             conn.commit()
             logger.debug("Updated UID to %s for email %s", uid, email_id)
-        finally:
-            conn.close()
     except sqlite3.Error as e:
         logger.error("Failed to update UID for email %s: %s", email_id, e)
         raise
-
 
 def enqueue_email(uid, folder, sender, recipients, subject, date_received, message_size,
                   spam_score, rule_matched, actions, raw_headers, attachments, processed,
@@ -651,8 +611,7 @@ def verify():
         raise RuntimeError(f"Database file not found at {DB_PATH}")
 
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             version = _get_version(conn)
 
             if version != CURRENT_VERSION:
@@ -665,8 +624,6 @@ def verify():
 
             if missing:
                 raise RuntimeError(f"Database missing expected tables: {missing}")
-        finally:
-            conn.close()
 
     except sqlite3.Error as e:
         logger.error("Database verification failed: %s", e)
@@ -676,8 +633,7 @@ def get_known_uids(folder, account_id=None):
     logger.debug("Fetching known UIDs for folder %s", folder)
 
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             if account_id is not None:
                 rows = conn.execute(
                     "SELECT uid FROM emails WHERE folder = ? AND account_id = ?",
@@ -691,8 +647,6 @@ def get_known_uids(folder, account_id=None):
             known = {int(row["uid"]) for row in rows}
             logger.debug("Found %s known UID(s) in %s", len(known), folder)
             return known
-        finally:
-            conn.close()
 
     except sqlite3.Error as e:
         logger.error("Failed to fetch known UIDs for folder %s: %s", folder, e)
@@ -702,8 +656,7 @@ def get_unprocessed_emails(account_id=None):
     logger.debug("Fetching unprocessed email records")
 
     try:
-        conn = get_connection()
-        try:
+        with _db() as conn:
             if account_id is not None:
                 rows = conn.execute(
                     "SELECT * FROM emails WHERE processed = 0 AND account_id = ?",
@@ -713,8 +666,6 @@ def get_unprocessed_emails(account_id=None):
                 rows = conn.execute("SELECT * FROM emails WHERE processed = 0").fetchall()
             logger.debug("Found %s unprocessed email record(s)", len(rows))
             return rows
-        finally:
-            conn.close()
 
     except sqlite3.Error as e:
         logger.error("Failed to fetch unprocessed email records: %s", e)
