@@ -85,12 +85,12 @@
 {% for rule in rules %}
 <div class="card mb-3">
     <div class="card-body">
-        <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+        <div class="d-flex align-items-start justify-content-between gap-3 mb-3 flex-wrap">
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <span class="fw-semibold">{{ rule.name or "(unnamed)" }}</span>
                 <span class="badge text-bg-secondary">match {{ rule.match or "all" }}</span>
             </div>
-            <div class="d-flex gap-2 flex-shrink-0">
+            <div class="d-flex gap-2">
                 <form method="post" action="/rules/{{ rule.id }}/move-up">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-secondary btn-sm" {{ 'disabled' if loop.first }}>&#8593;</button>

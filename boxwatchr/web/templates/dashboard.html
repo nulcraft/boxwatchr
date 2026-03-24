@@ -5,7 +5,7 @@
 <h1 class="h4 fw-semibold mb-4">Dashboard</h1>
 
 <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="card h-100">
             <div class="card-body">
                 <h2 class="card-subtitle">Total Emails</h2>
@@ -13,7 +13,7 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="card h-100">
             <div class="card-body">
                 <h2 class="card-subtitle">Trained: Spam</h2>
@@ -21,7 +21,7 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="card h-100">
             <div class="card-body">
                 <h2 class="card-subtitle">Trained: Ham</h2>
@@ -29,7 +29,7 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-12 col-sm-6 col-lg-3">
         <div class="card h-100">
             <div class="card-body">
                 <h2 class="card-subtitle">Pending</h2>
@@ -46,6 +46,7 @@
                 <h2 class="card-subtitle">Spam Score Distribution</h2>
                 {% set bucket_total = stats.score_buckets.values()|sum %}
                 {% if bucket_total > 0 %}
+                <div class="table-responsive">
                 <table class="table table-sm mb-0">
                     <thead>
                         <tr>
@@ -71,6 +72,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
                 {% else %}
                 <p class="text-secondary small mb-0">No data yet.</p>
                 {% endif %}
@@ -82,6 +84,7 @@
             <div class="card-body">
                 <h2 class="card-subtitle">Rules Matched</h2>
                 {% if stats.rule_counts %}
+                <div class="table-responsive">
                 <table class="table table-sm mb-0">
                     <thead>
                         <tr>
@@ -98,6 +101,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
                 {% else %}
                 <p class="text-secondary small mb-0">No rules have matched yet.</p>
                 {% endif %}

@@ -101,19 +101,6 @@
     opacity: 1;
 }
 
-@media (max-width: 575.98px) {
-    #navMenu {
-        padding-bottom: 10px;
-    }
-
-    #navMenu .site-nav-link {
-        width: 100%;
-        border: 1px solid var(--bs-border-color);
-        border-radius: 6px;
-        padding: 10px 14px !important;
-    }
-}
-
 /* ============================================================
    Typography
    ============================================================ */
@@ -344,17 +331,6 @@ th {
     --bs-btn-active-color: var(--c-danger-text);
 }
 
-@media (max-width: 480px) {
-    .action-forms {
-        flex-direction: column;
-    }
-
-    .action-forms form,
-    .action-forms .btn {
-        width: 100%;
-    }
-}
-
 /* ============================================================
    Rule editor column widths
    ============================================================ */
@@ -473,4 +449,26 @@ pre {
 .login-brand {
     font-size: 22px;
     font-weight: 700;
+}
+
+/* ============================================================
+   Responsive (max-width: 767.98px)
+   ============================================================ */
+
+@media (max-width: 767.98px) {
+    #navMenu .site-nav-link {
+        width: 100%;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 6px;
+        padding: 10px 14px !important;
+    }
+
+    .action-forms {
+        flex-direction: column;
+    }
+
+    .action-forms form,
+    .action-forms .btn {
+        width: 100%;
+    }
 }
