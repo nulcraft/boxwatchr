@@ -51,7 +51,7 @@
                 </thead>
                 <tbody>
                     {% for row in log_rows %}
-                    <tr class="log-{{ row.level }}{% if row.email_id %} log-linked{% endif %}"{% if row.email_id %} onclick="location.href='/emails/{{ row.email_id }}'"{% endif %}>
+                    <tr class="log-{{ row.level }}{% if row.email_id %} log-linked{% endif %}"{% if row.email_id %} data-email-id="{{ row.email_id }}"{% endif %}>
                         <td class="col-date small">{{ row.logged_at | localtime }}</td>
                         <td class="small">{{ row.level }}</td>
                         <td class="small">{{ row.logger_name }}</td>
@@ -83,3 +83,5 @@
 </nav>
 {% endif %}
 {% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='scripts/logs.js') }}"></script>{% endblock %}

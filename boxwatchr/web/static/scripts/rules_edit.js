@@ -65,7 +65,7 @@ function addCondition() {
 }
 
 function prepareSubmit() {
-    document.querySelectorAll(".action-dest").forEach(function (el) {
+    document.querySelectorAll(".action-dest").forEach(function(el) {
         el.disabled = false;
     });
 }
@@ -79,3 +79,44 @@ function addAction() {
     var notice = document.getElementById("actions-empty");
     if (notice) notice.classList.add("d-none");
 }
+
+document.addEventListener("DOMContentLoaded", function() {
+    var form = document.querySelector("form[method='post']");
+    if (form) {
+        form.addEventListener("submit", prepareSubmit);
+    }
+
+    var condContainer = document.getElementById("conditions-container");
+    if (condContainer) {
+        condContainer.addEventListener("change", function(e) {
+            if (e.target.classList.contains("cond-field")) {
+                onFieldChange(e.target);
+            } else if (e.target.classList.contains("cond-operator")) {
+                onOperatorChange(e.target);
+            }
+        });
+        condContainer.addEventListener("click", function(e) {
+            var btn = e.target.closest("[data-action='remove-condition']");
+            if (btn) removeCondition(btn);
+        });
+    }
+
+    var actionsContainer = document.getElementById("actions-container");
+    if (actionsContainer) {
+        actionsContainer.addEventListener("change", function(e) {
+            if (e.target.classList.contains("action-type")) {
+                onActionTypeChange(e.target);
+            }
+        });
+        actionsContainer.addEventListener("click", function(e) {
+            var btn = e.target.closest("[data-action='remove-action']");
+            if (btn) removeAction(btn);
+        });
+    }
+
+    var addCondBtn = document.querySelector("[data-action='add-condition']");
+    if (addCondBtn) addCondBtn.addEventListener("click", addCondition);
+
+    var addActBtn = document.querySelector("[data-action='add-action']");
+    if (addActBtn) addActBtn.addEventListener("click", addAction);
+});

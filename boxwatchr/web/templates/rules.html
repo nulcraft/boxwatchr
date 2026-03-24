@@ -5,47 +5,63 @@
 <div class="d-flex align-items-center justify-content-between mb-4">
     <h1 class="h4 fw-semibold mb-0">Rules</h1>
     <div class="d-flex gap-2">
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#import-modal">Import</button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#export-modal">Export</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="import-btn">Import</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="export-btn">Export</button>
         <a href="/rules/new" class="btn btn-primary btn-sm">Add Rule</a>
     </div>
 </div>
 
-<div class="modal fade" id="export-modal" tabindex="-1" aria-labelledby="export-modal-label" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="export-modal-label">Export Rules</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p class="small text-secondary mb-2">Copy the JSON below to back up your rules.</p>
-                <textarea id="export-json-text" class="form-control font-monospace small" rows="10" readonly onclick="this.select()">{{ export_json }}</textarea>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+<div class="overlay d-none" id="export-overlay">
+    <div class="card overlay-box overlay-box-lg">
+        <div class="card-body">
+            <p class="section-label mb-3">Export Rules</p>
+            <p class="small text-secondary mb-2">Copy the JSON below to back up your rules.</p>
+            <textarea id="export-json-text" class="form-control font-monospace small" rows="10" readonly>{{ export_json }}</textarea>
+            <div class="d-flex justify-content-end mt-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="export-close">Close</button>
             </div>
         </div>
     </div>
 </div>
 
-<div class="modal fade" id="import-modal" tabindex="-1" aria-labelledby="import-modal-label" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="import-modal-label">Import Rules</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p class="small text-secondary mb-2">Paste exported rules JSON below. Duplicates will be skipped automatically.</p>
-                <form method="post" action="/rules/import" id="import-form">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                    <textarea name="rules_json" class="form-control font-monospace small" rows="10" placeholder='[{"name": "My Rule", ...}]'></textarea>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+<div class="overlay d-none" id="import-overlay">
+    <div class="card overlay-box overlay-box-lg">
+        <div class="card-body">
+            <p class="section-label mb-3">Import Rules</p>
+            <p class="small text-secondary mb-2">Paste exported rules JSON below. Duplicates will be skipped automatically.</p>
+            <form method="post" action="/rules/import" id="import-form">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <textarea name="rules_json" class="form-control font-monospace small" rows="10" placeholder='[{"name": "My Rule", ...}]'></textarea>
+            </form>
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="import-cancel">Cancel</button>
                 <button type="submit" form="import-form" class="btn btn-primary btn-sm">Import Rules</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="overlay d-none" id="delete-overlay">
+    <div class="card overlay-box">
+        <div class="card-body">
+            <p class="section-label mb-3">Delete Rule</p>
+            <p class="small mb-0">Delete the <strong class="overlay-rule-name"></strong> rule? This cannot be undone.</p>
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="delete-cancel">Cancel</button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="delete-confirm">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="overlay d-none" id="run-overlay">
+    <div class="card overlay-box">
+        <div class="card-body">
+            <p class="section-label mb-3">Run Rule</p>
+            <p class="small mb-0">Run the <strong class="overlay-rule-name"></strong> rule against all emails in your watched folder?</p>
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="run-cancel">Cancel</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="run-confirm">Run Rule</button>
             </div>
         </div>
     </div>
@@ -84,11 +100,11 @@
                     <button type="submit" class="btn btn-outline-secondary btn-sm" {{ 'disabled' if loop.last }}>&#8595;</button>
                 </form>
                 <a href="/rules/{{ rule.id }}/edit" class="btn btn-outline-secondary btn-sm">Edit</a>
-                <form method="post" action="/rules/{{ rule.id }}/run" data-rule-name="{{ rule.name }}" onsubmit="return confirm('Run the ' + this.dataset.ruleName + ' rule against all emails in your watched folder?')">
+                <form method="post" action="/rules/{{ rule.id }}/run" data-rule-name="{{ rule.name }}">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-primary btn-sm">Run Rule</button>
                 </form>
-                <form method="post" action="/rules/{{ rule.id }}/delete" data-rule-name="{{ rule.name }}" onsubmit="return confirm('Delete the ' + this.dataset.ruleName + ' rule?')">
+                <form method="post" action="/rules/{{ rule.id }}/delete" data-rule-name="{{ rule.name }}">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
                 </form>
@@ -150,25 +166,15 @@
 </div>
 {% endfor %}
 
-<div id="rule-run-overlay" class="d-none position-fixed top-0 start-0 w-100 h-100 align-items-center justify-content-center" style="background:rgba(0,0,0,0.65);z-index:9999;">
-    <div class="text-center text-white px-4">
-        <div class="spinner-border mb-3" role="status" aria-hidden="true"></div>
-        <p class="fs-6 fw-semibold mb-1">Running rule against your messages&hellip;</p>
-        <p class="small text-white-50">This may take a moment. Please do not navigate away.</p>
+<div class="overlay d-none" id="run-progress-overlay">
+    <div class="card overlay-box text-center">
+        <div class="card-body">
+            <p class="fs-6 fw-semibold mb-1">Running rule against your messages.</p>
+            <p class="small text-secondary mb-0">This may take a moment. Please do not navigate away.</p>
+        </div>
     </div>
 </div>
 
 {% endblock %}
 
-{% block scripts %}
-<script>
-document.querySelectorAll("form[action*='/run']").forEach(function(form) {
-    form.addEventListener("submit", function(e) {
-        if (e.defaultPrevented) { return; }
-        var overlay = document.getElementById("rule-run-overlay");
-        overlay.classList.remove("d-none");
-        overlay.style.display = "flex";
-    });
-});
-</script>
-{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='scripts/rules.js') }}"></script>{% endblock %}

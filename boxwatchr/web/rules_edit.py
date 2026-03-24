@@ -275,7 +275,6 @@ def rule_run(rule_id):
                                     action_type, uid, extra={"email_id": email_id}
                                 )
                         else:
-                            rspamd_learned = "spam" if action_type == "learn_spam" else "ham"
                             executed.append(action)
                         continue
 

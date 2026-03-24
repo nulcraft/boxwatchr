@@ -11,7 +11,7 @@
 <div class="alert alert-danger py-2 px-3 small mb-4">{{ error }}</div>
 {% endif %}
 
-<form method="post" action="{{ form_action }}" onsubmit="prepareSubmit()">
+<form method="post" action="{{ form_action }}">
 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
     <div class="card mb-3">
@@ -55,7 +55,7 @@
                 {% for c in rule.conditions %}
                 {% set is_numeric = c.field == "rspamd_score" %}
                 <div class="condition-row d-flex gap-2 align-items-start mb-2 flex-wrap flex-sm-nowrap">
-                    <select name="condition_field" class="form-select cond-field" onchange="onFieldChange(this)">
+                    <select name="condition_field" class="form-select cond-field">
                         <optgroup label="Sender">
                             <option value="sender" {% if c.field == "sender" %}selected{% endif %}>Sender — full address</option>
                             <option value="sender_local" {% if c.field == "sender_local" %}selected{% endif %}>Sender — local part (before @)</option>
@@ -85,7 +85,7 @@
                             <option value="rspamd_score" {% if c.field == "rspamd_score" %}selected{% endif %}>rspamd score</option>
                         </optgroup>
                     </select>
-                    <select name="condition_operator" class="form-select cond-operator" onchange="onOperatorChange(this)">
+                    <select name="condition_operator" class="form-select cond-operator">
                         {% if is_numeric %}
                         <option value="greater_than" {% if c.operator == "greater_than" %}selected{% endif %}>greater than</option>
                         <option value="less_than" {% if c.operator == "less_than" %}selected{% endif %}>less than</option>
@@ -104,7 +104,7 @@
                         <option value="true" {% if c.value == "true" %}selected{% endif %}>is empty</option>
                         <option value="false" {% if c.value == "false" %}selected{% endif %}>is not empty</option>
                     </select>
-                    <button type="button" class="btn btn-outline-danger flex-shrink-0" onclick="removeCondition(this)">&times;</button>
+                    <button type="button" class="btn btn-outline-danger flex-shrink-0" data-action="remove-condition">&times;</button>
                 </div>
                 {% endfor %}
             </div>
@@ -112,7 +112,7 @@
             {% if not rule.conditions %}
             <p class="text-secondary small mb-0" id="conditions-empty">No conditions added yet.</p>
             {% endif %}
-            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="addCondition()">+ Add Condition</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" data-action="add-condition">+ Add Condition</button>
         </div>
     </div>
 
@@ -123,7 +123,7 @@
             <div id="actions-container">
                 {% for a in rule.actions %}
                 <div class="action-row d-flex gap-2 align-items-start mb-2 flex-wrap flex-sm-nowrap">
-                    <select name="action_type" class="form-select action-type" onchange="onActionTypeChange(this)">
+                    <select name="action_type" class="form-select action-type">
                         <option value="move" {% if a.type == "move" %}selected{% endif %}>Move to folder</option>
                         <option value="delete" {% if a.type == "delete" %}selected{% endif %}>Delete</option>
                         <option value="spam" {% if a.type == "spam" %}selected{% endif %}>Mark as spam</option>
@@ -147,7 +147,7 @@
                     {% else %}
                     <input name="action_destination" type="text" class="form-control action-dest flex-grow-1{% if a.type != 'move' %} d-none{% endif %}" placeholder="Folder (e.g. INBOX.Newsletters)" value="{{ a.destination if a.type == 'move' else '' }}"{% if a.type != 'move' %} disabled{% endif %}>
                     {% endif %}
-                    <button type="button" class="btn btn-outline-danger flex-shrink-0" onclick="removeAction(this)">&times;</button>
+                    <button type="button" class="btn btn-outline-danger flex-shrink-0" data-action="remove-action">&times;</button>
                 </div>
                 {% endfor %}
             </div>
@@ -155,7 +155,7 @@
             {% if not rule.actions %}
             <p class="text-secondary small mb-0" id="actions-empty">No actions added yet.</p>
             {% endif %}
-            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="addAction()">+ Add Action</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" data-action="add-action">+ Add Action</button>
         </div>
     </div>
 
@@ -168,7 +168,7 @@
 
 <template id="condition-template">
     <div class="condition-row d-flex gap-2 align-items-start mb-2 flex-wrap flex-sm-nowrap">
-        <select name="condition_field" class="form-select cond-field" onchange="onFieldChange(this)">
+        <select name="condition_field" class="form-select cond-field">
             <optgroup label="Sender">
                 <option value="sender">Sender — full address</option>
                 <option value="sender_local">Sender — local part (before @)</option>
@@ -198,7 +198,7 @@
                 <option value="rspamd_score">rspamd score</option>
             </optgroup>
         </select>
-        <select name="condition_operator" class="form-select cond-operator" onchange="onOperatorChange(this)">
+        <select name="condition_operator" class="form-select cond-operator">
             <option value="equals">equals</option>
             <option value="not_equals">does not equal</option>
             <option value="contains">contains</option>
@@ -210,13 +210,13 @@
             <option value="true">is empty</option>
             <option value="false">is not empty</option>
         </select>
-        <button type="button" class="btn btn-outline-danger flex-shrink-0" onclick="removeCondition(this)">&times;</button>
+        <button type="button" class="btn btn-outline-danger flex-shrink-0" data-action="remove-condition">&times;</button>
     </div>
 </template>
 
 <template id="action-template">
     <div class="action-row d-flex gap-2 align-items-start mb-2 flex-wrap flex-sm-nowrap">
-        <select name="action_type" class="form-select action-type" onchange="onActionTypeChange(this)">
+        <select name="action_type" class="form-select action-type">
             <option value="move">Move to folder</option>
             <option value="delete">Delete</option>
             <option value="spam">Mark as spam</option>
@@ -237,7 +237,7 @@
         {% else %}
         <input name="action_destination" type="text" class="form-control action-dest flex-grow-1 d-none" placeholder="Folder (e.g. INBOX.Newsletters)" disabled>
         {% endif %}
-        <button type="button" class="btn btn-outline-danger flex-shrink-0" onclick="removeAction(this)">&times;</button>
+        <button type="button" class="btn btn-outline-danger flex-shrink-0" data-action="remove-action">&times;</button>
     </div>
 </template>
 
