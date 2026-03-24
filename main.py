@@ -519,7 +519,7 @@ def main():
 
             try:
                 logger.debug("Entering IMAP watch loop")
-                imap.watch(process_email)
+                imap.watch(process_email, rescan_callback=startup_scan)
             except FatalImapError:
                 raise
             except Exception as e:
