@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-03-24
+
+### Changed
+- Replaced the repeated `get_connection() / try / finally conn.close()` pattern across `database.py` and all web modules with a `_db()` context manager, exported as `db_connection` for use outside the module.
+
 ## [1.0.3] - 2026-03-24
 
 ### Added
