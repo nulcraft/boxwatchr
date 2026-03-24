@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-03-24
+
 ### Added
 - Added nginx and Apache reverse proxy example configurations under `reverse-proxy/`. Covers SSL, OCSP stapling, security headers, IP-based access control, optional basic auth, and sub-path proxying for the rspamd web UI at `/rspamd/`.
 - Added periodic rescan every 5 minutes in IMAP IDLE mode to catch messages missed when IDLE fires partway through a bulk move. The IDLE session terminates early, the folder is reconciled against the database, then IDLE resumes.
