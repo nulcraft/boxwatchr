@@ -28,8 +28,8 @@ Self-hosted IMAP email filtering daemon. Single Docker container with supervisor
 - [ ] **aiosqlite implementation** from 'https://github.com/omnilib/aiosqlite' (`pip install aiosqlite`) and completely revamping all interactions with the database
 - [ ] **Investigate better async threading** for multiple IMAP accounts/database calls/anything that needs threading
 
-## Completed Tasks ✓
+## Completed Tasks
 
-- [x] **Investigate proper GIT handling** for Claude so I can focus more on issues and code changes as opposed to figuring out how Github actually works (for now...I really need to learn Git shit) (2026-03-24, no PR link for this)
-- [x] **Periodic rescan** to catch emails missed by IMAP IDLE (2026-03-24, [#11](https://github.com/nulcraft/boxwatchr/pull/11))
+- [x] **Investigate proper GIT handling** for Claude so I can focus more on issues and code changes as opposed to figuring out how Github actually works (for now...I really need to learn Git shit) (**2026-03-24**, no PR link for this)
+- [x] **Periodic rescan** to catch emails missed by IMAP IDLE (**2026-03-24**, [#11](https://github.com/nulcraft/boxwatchr/pull/11))
     - Implemented as a 5-minute interval inside the IDLE loop. The IDLE session terminates early when the interval is due, `startup_scan()` runs against the DB, then IDLE resumes. Polling mode does not need this since it already catches missed messages on the next cycle.
