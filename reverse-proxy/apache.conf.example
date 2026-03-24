@@ -1,0 +1,83 @@
+# DISCLAIMER: This configuration has not been tested. It is provided as a
+# best-effort port of the nginx example for Apache users. Use at your own risk.
+# Review and test thoroughly before deploying in any environment.
+#
+# Required Apache modules:
+#   mod_ssl, mod_proxy, mod_proxy_http, mod_headers, mod_rewrite
+#
+# Enable with:
+#   a2enmod ssl proxy proxy_http headers rewrite
+#   a2ensite boxwatchr
+#   systemctl reload apache2
+
+<VirtualHost *:443>
+    ServerName boxwatchr.example.com
+
+    # --- SSL ---
+    # Wildcard cert (*.example.com): use the root domain path below.
+    # Subdomain-only cert: replace example.com with boxwatchr.example.com in both paths.
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/example.com/privkey.pem
+    SSLProtocol -all +TLSv1.2 +TLSv1.3
+    SSLHonorCipherOrder on
+    SSLSessionTickets off
+    SSLUseStapling on
+    SSLStaplingCache shmcb:/var/run/ocsp(128000)
+
+    # --- Security headers ---
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Content-Security-Policy "frame-ancestors 'self';"
+
+    # --- Access control ---
+    # Uncomment and adjust to restrict access to trusted networks or IPs only.
+    # <RequireAny>
+    #     Require ip 192.168.1.0/24
+    #     Require ip 10.0.0.0/8
+    #     Require ip 123.123.123.123
+    # </RequireAny>
+
+    # --- Basic auth (optional) ---
+    # Adds an additional username/password prompt on top of boxwatchr's own login.
+    # Generate a password file with: htpasswd -c /etc/apache2/.htpasswd USERNAME
+    # <Location />
+    #     AuthType Basic
+    #     AuthName "Restricted"
+    #     AuthUserFile /etc/apache2/.htpasswd
+    #     Require valid-user
+    # </Location>
+
+    CustomLog /var/log/apache2/boxwatchr.access.log combined
+    ErrorLog /var/log/apache2/boxwatchr.error.log
+
+    # --- Proxy settings ---
+    ProxyPreserveHost On
+    ProxyRequests Off
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-Ssl "on"
+
+    # --- rspamd web UI ---
+    # Accessible at https://boxwatchr.example.com/rspamd/
+    # rspamd handles its own password prompt.
+    RedirectMatch ^/rspamd$ /rspamd/
+
+    <Location /rspamd/>
+        ProxyPass http://CONTAINER_IP:11334/
+        ProxyPassReverse http://CONTAINER_IP:11334/
+    </Location>
+
+    # --- boxwatchr ---
+    <Location />
+        ProxyPass http://CONTAINER_IP:80/
+        ProxyPassReverse http://CONTAINER_IP:80/
+    </Location>
+
+</VirtualHost>
+
+# SSLStaplingCache must be declared outside the VirtualHost block.
+# Add this line to your main Apache config (e.g. /etc/apache2/apache2.conf)
+# if it is not already present:
+#
+#   SSLStaplingCache shmcb:/var/run/ocsp(128000)
