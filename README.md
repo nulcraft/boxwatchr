@@ -155,6 +155,11 @@ If your platform manages containers through a GUI rather than docker-compose, sk
 
 Do not use an env file or `--env-file` flag. Pass variables directly through your platform's environment variable interface. Pointing `--env-file` at a file that does not exist will prevent the container from starting.
 
+**If you assign the container its own IP address** (common in Unraid using a bridge or macvlan network), port mappings are bypassed entirely. Access the container directly on its IP using the container ports:
+
+- Dashboard: `http://container-ip` or `http://container-ip:80`
+- rspamd: `http://container-ip:11334`
+
 ---
 
 ## First-time setup

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Documented that containers assigned a dedicated IP address (common in Unraid bridge/macvlan networks) must be accessed directly on the container ports (80 and 11334), not the host port mappings.
+
 ## [1.0.2] - 2026-03-24
 
 ### Fixed
