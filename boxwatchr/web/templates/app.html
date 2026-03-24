@@ -24,8 +24,8 @@
                 {% if not setup_mode %}
                 <a href="/dashboard" class="nav-link site-nav-link{% if request.path == '/dashboard' %} active{% endif %}">dashboard</a>
                 <a href="/emails" class="nav-link site-nav-link{% if request.path.startswith('/emails') %} active{% endif %}">emails</a>
-                <a href="/logs" class="nav-link site-nav-link{% if request.path == '/logs' %} active{% endif %}">logs</a>
                 <a href="/rules" class="nav-link site-nav-link{% if request.path.startswith('/rules') %} active{% endif %}">rules</a>
+                <a href="/logs" class="nav-link site-nav-link{% if request.path == '/logs' %} active{% endif %}">logs</a>
                 <a href="/config" class="nav-link site-nav-link{% if request.path == '/config' %} active{% endif %}">config</a>
                 {% if show_logout %}
                 <a href="/logout" class="nav-link site-nav-link site-nav-logout small ms-md-auto">logout</a>

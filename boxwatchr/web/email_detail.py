@@ -65,7 +65,7 @@ def email_detail(email_id):
     logs = [dict(r) for r in log_rows]
 
     return render_template(
-        "emails_view.html",
+        "email_detail.html",
         email=email,
         logs=logs,
         show_logout=bool(config.WEB_PASSWORD),

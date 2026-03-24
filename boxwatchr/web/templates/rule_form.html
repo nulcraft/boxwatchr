@@ -1,10 +1,10 @@
 {% extends "app.html" %}
-{% block title %}boxwatchr | {{ page_title }}{% endblock %}
+{% block title %}boxwatchr / {% if rule.id %}Edit Rule{% else %}New Rule{% endif %}{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center gap-3 mb-4">
     <a href="/rules" class="text-secondary text-decoration-none small">&larr; Rules</a>
-    <h1 class="h4 fw-semibold mb-0">{{ page_title }}</h1>
+    <h1 class="h4 fw-semibold mb-0">{% if rule.id %}Edit Rule{% else %}New Rule{% endif %}</h1>
 </div>
 
 {% if error %}

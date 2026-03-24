@@ -68,10 +68,9 @@ def rule_new():
                 error = "Failed to save rule: %s" % e
 
     return render_template(
-        "rules_edit.html",
+        "rule_form.html",
         rule=rule,
         form_action=url_for("rule_new"),
-        page_title="New Rule",
         error=error,
         folders=folders,
         field_labels=_FIELD_LABELS,
@@ -119,10 +118,9 @@ def rule_edit(rule_id):
                 error = "Failed to save rule: %s" % e
 
     return render_template(
-        "rules_edit.html",
+        "rule_form.html",
         rule=rule,
         form_action=url_for("rule_edit", rule_id=rule_id),
-        page_title="Edit Rule",
         error=error,
         folders=folders,
         field_labels=_FIELD_LABELS,

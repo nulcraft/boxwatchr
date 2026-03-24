@@ -205,10 +205,10 @@ def start_dashboard():
     import boxwatchr.web.config
     import boxwatchr.web.dashboard
     import boxwatchr.web.emails
-    import boxwatchr.web.emails_view
+    import boxwatchr.web.email_detail
     import boxwatchr.web.logs
     import boxwatchr.web.rules
-    import boxwatchr.web.rules_edit
+    import boxwatchr.web.rule_form
     t = threading.Thread(target=_run_server, daemon=True, name="web-server")
     t.start()
     logger.debug("Web server started on port 80")

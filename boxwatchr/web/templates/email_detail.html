@@ -1,8 +1,11 @@
 {% extends "app.html" %}
-{% block title %}boxwatchr | Email {{ email.id[:8] }}{% endblock %}
+{% block title %}boxwatchr / Email Detail ({{ email.id[:8] }}){% endblock %}
 
 {% block content %}
-<h1 class="h4 fw-semibold mb-4">Email Detail</h1>
+<div class="d-flex align-items-center gap-3 mb-4">
+    <a href="/emails" class="text-secondary text-decoration-none small">&larr; Emails</a>
+    <h1 class="h4 fw-semibold mb-0">Email Detail ({{ email.id[:8] }})</h1>
+</div>
 
 <div class="card mb-4">
     <div class="card-body">
