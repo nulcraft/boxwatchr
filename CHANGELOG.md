@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Marked `config/.env` as optional in `docker-compose.yml` so the container starts without the file present.
+
 ### Changed
+- Added setup instructions for Unraid, Portainer, Synology, and other Docker GUI platforms that configure containers through environment variables rather than an env file.
 - Clarified that timestamps are stored in UTC and converted to the configured timezone at display time, so `TZ` can be changed at any time without affecting stored data.
 - Fixed incorrect claim that the rspamd web interface is inaccessible when no password is set. The generated password is printed to the container logs at startup.
 - Removed stale reference to a `greylist.conf` file in the `config/` mount. Greylisting is disabled automatically by the container entrypoint and no file is written to the host.

@@ -52,9 +52,9 @@ mkdir -p boxwatchr/config boxwatchr/data
 cd boxwatchr
 ```
 
-### Step 2: Create your environment file
+### Step 2: Create your environment file (optional)
 
-Inside the `config` folder, create a file called `.env`. This is where your container-level settings live. Copy the following into it and adjust as needed:
+The `.env` file is optional. If you skip it, the container starts with sensible defaults (PUID/PGID 1000, UTC timezone, random rspamd password). If you want to set specific values, create `config/.env` and copy the following into it:
 
 ```
 PUID=99
@@ -93,7 +93,8 @@ services:
       - ./config:/app/config
       - ./data:/app/data
     env_file:
-      - ./config/.env
+      - path: ./config/.env
+        required: false
 ```
 
 By default the web dashboard runs on port **8143**. Port **11334** is the rspamd web interface. It's optional to expose it, but useful if you want to see what rspamd is doing.
@@ -123,6 +124,36 @@ http://your-server-ip:8143
 ```
 
 You'll be taken directly to the setup wizard.
+
+---
+
+## Running on Unraid, Portainer, Synology, or other Docker GUI platforms
+
+If your platform manages containers through a GUI rather than docker-compose, skip the `.env` file entirely. Configure the container like this:
+
+**Image:** `ghcr.io/nulcraft/boxwatchr:latest`
+
+**Volumes:**
+| Container path | Purpose |
+|---|---|
+| `/app/config` | Configuration storage |
+| `/app/data` | Database and Bayesian data |
+
+**Environment variables** (set these in your platform's GUI):
+| Variable | Default | Description |
+|---|---|---|
+| `PUID` | `1000` | User ID to run as |
+| `PGID` | `1000` | Group ID to run as |
+| `TZ` | `UTC` | Display timezone |
+| `RSPAMD_PASSWORD` | *(random)* | rspamd web interface password |
+
+**Ports:**
+| Host port | Container port | Purpose |
+|---|---|---|
+| `8143` | `80` | boxwatchr web dashboard |
+| `11334` | `11334` | rspamd web interface (optional) |
+
+Do not use an env file or `--env-file` flag. Pass variables directly through your platform's environment variable interface. Pointing `--env-file` at a file that does not exist will prevent the container from starting.
 
 ---
 

@@ -12,7 +12,8 @@ services:
       - ./boxwatchr:/app/boxwatchr:ro
       - ./main.py:/app/main.py:ro
     env_file:
-      - ./config/.env
+      - path: ./config/.env
+        required: false
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep -q PONG && curl -sf http://127.0.0.1:11334/ping > /dev/null && curl -sf http://127.0.0.1:80/ > /dev/null && python3 -c \"import socket; socket.create_connection(('127.0.0.1', 5335), 2).close()\""]
       interval: 30s
