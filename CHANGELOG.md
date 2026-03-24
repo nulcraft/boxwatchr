@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-03-24
+
 ### Fixed
 - Marked `config/.env` as optional in `docker-compose.yml` so the container starts without the file present.
 
