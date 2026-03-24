@@ -1,0 +1,30 @@
+# boxwatchr
+
+Self-hosted IMAP email filtering daemon. Single Docker container with supervisord. Monitors IMAP via IDLE/polling, scores mail with rspamd, evaluates rules, executes IMAP actions, logs to SQLite. Flask dashboard on port 80.
+
+### Critical Fixes
+- [ ] rspamd error: "Cannot receive neighbours data: Network error" on `local/neighbours` (benign or not?)
+
+### Roadmap Changes & Implementations
+- [ ] Support multiple IMAP accounts
+    - [ ] Rules should be associated to IMAP account custom ID
+    - [ ] "IMAP Account" drop-down on the following pages, with the first account created as the default selected/populated on page loads:
+        - [ ] `/emails` (only show emails per account, not massive list)
+        - [ ] `/logs` (additional filter for selecting a specific IMAP account)
+        - [ ] `/rules` (IMPORT/EXPORT buttons to allow easy rule migration to other IMAP accounts)
+        - [ ] `/config`
+            - "IMAP Account" becomes "IMAP Accounts"
+            - Drop-down to select different accounts with IMAP credentials form populated by Javascript
+        - [ ] `/setup` (no need to allow creating multiple IMAP accounts at startup -- can be left alone unless backend database changes need to be made at this stage)
+    - [ ] Rules page should be updated to allow selecting a specific account for rules, IMPORT/EXPORT buttons apply to the specific account chosen in the drop-down
+    - [ ] One watch thread per account on backend
+    - [ ] Emails page should feature drop-down for account selection as well
+    - [ ] Deleting IMAP account deletes all associated rules and email history
+        - `logs` table retains all records, but /logs page no longer includes ability to select previous IMAP account for filtering
+- [ ] "**Continue After Match** / **Stop After Match**" flags
+    - Add per-rule "Continue After Match" vs "Stop After Match" select. Default is to Stop After Match. This will allow chaining rules, such as having a "Learn Ham" rule that then falls through to the next rule. Rule order will be important.
+- [ ] Look at implementing aiosqlite from 'https://github.com/omnilib/aiosqlite' (`pip install aiosqlite`) and completely revamping all interactions with the database
+- [ ] Investigate/implement better async threading for multiple IMAP accounts/database calls/anything that needs threading
+- [ ] Investigate proper GIT handling for Claude so I can focus more on issues and code changes as opposed to figuring out how Github actually works (for now...I really need to learn Git shit)
+
+### Completed Tasks ✓
