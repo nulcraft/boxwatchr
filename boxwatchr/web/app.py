@@ -2,6 +2,7 @@ import functools
 import hashlib
 import hmac
 import base64
+import os
 import secrets
 import threading
 import logging
@@ -15,6 +16,13 @@ from boxwatchr.database import get_config, set_config, bulk_set_config, upsert_a
 from boxwatchr.logger import get_logger
 
 logger = get_logger("boxwatchr.web")
+
+_VERSION_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "VERSION")
+try:
+    with open(_VERSION_FILE) as _f:
+        APP_VERSION = _f.read().strip()
+except OSError:
+    APP_VERSION = "unknown"
 
 app = Flask(__name__, template_folder="templates")
 
@@ -181,7 +189,7 @@ app.jinja_env.filters["localtime"] = _utc_to_local
 
 @app.context_processor
 def _inject_globals():
-    return {"dry_run": config.DRYRUN}
+    return {"dry_run": config.DRYRUN, "app_version": APP_VERSION}
 
 @app.route("/")
 def index():
@@ -209,6 +217,7 @@ def start_dashboard():
     import boxwatchr.web.logs
     import boxwatchr.web.rules
     import boxwatchr.web.rule_form
+    import boxwatchr.web.version
     t = threading.Thread(target=_run_server, daemon=True, name="web-server")
     t.start()
     logger.debug("Web server started on port 80")
