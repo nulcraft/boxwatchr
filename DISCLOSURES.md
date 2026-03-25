@@ -45,7 +45,6 @@ boxwatchr bundles the following third-party software. Each component is used as 
 |---|---|---|---|
 | IMAPClient | 3.1.0 | BSD-3-Clause | IMAP connection management and IDLE push notifications |
 | python-dotenv | 1.2.2 | BSD-3-Clause | Loads environment variables from the `.env` file at startup |
-| PyYAML | 6.0.3 | MIT | Parses the `rules.yaml` configuration file |
 | watchdog | 6.0.0 | Apache 2.0 | Detects filesystem changes to hot-reload rules without a restart |
 | Flask | 3.1.3 | BSD-3-Clause | Web framework for the dashboard |
 | Werkzeug | 3.1.6 | BSD-3-Clause | WSGI toolkit and request/response layer (Flask dependency) |

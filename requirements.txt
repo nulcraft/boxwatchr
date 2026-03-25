@@ -1,7 +1,6 @@
 # Direct dependencies
 IMAPClient==3.1.0           # IMAP connection and IDLE support
 python-dotenv==1.2.2        # Load .env into environment variables
-PyYAML==6.0.3               # Parse rules YAML
 watchdog==6.0.0             # Filesystem events for rules hot-reload
 
 # Flask and its dependencies
