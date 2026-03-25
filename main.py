@@ -261,7 +261,7 @@ def process_email(client, uid, message, current_uids=None):
     set_processing(True)
     try:
         msg_data = message.get(uid, {})
-        raw_message = msg_data.get(b"RFC822", b"")
+        raw_message = msg_data.get(b"BODY[]", b"")
         message_size = msg_data.get(b"RFC822.SIZE", 0)
         envelope = msg_data.get(b"ENVELOPE")
 

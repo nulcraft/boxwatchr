@@ -86,9 +86,9 @@ def select_folder(client):
         raise
 
 def fetch_message(client, uid):
-    logger.debug("Fetching message UID %s (RFC822 + SIZE + ENVELOPE)", uid)
+    logger.debug("Fetching message UID %s (BODY.PEEK[] + SIZE + ENVELOPE)", uid)
     try:
-        response = client.fetch([uid], ["RFC822", "RFC822.SIZE", "ENVELOPE"])
+        response = client.fetch([uid], ["BODY.PEEK[]", "RFC822.SIZE", "ENVELOPE"])
         msg_data = response.get(uid, {})
         size = msg_data.get(b"RFC822.SIZE", 0)
         logger.debug("Fetched message UID %s: %s bytes", uid, size)
