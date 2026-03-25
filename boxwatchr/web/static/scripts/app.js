@@ -17,7 +17,7 @@
             if (!body) return;
 
             body.innerHTML =
-                "<div>v" + latest + " is available. You have v" + data.current + ".</div>"
+                "<div>" + latest + " is available. You have " + data.current + ".</div>"
                 + "<div class=\"mt-2 d-flex gap-3 align-items-center\">"
                 + "<a href=\"https://github.com/nulcraft/boxwatchr/blob/main/CHANGELOG.md\""
                 + " target=\"_blank\" rel=\"noopener noreferrer\">See what changed &rarr;</a>"
