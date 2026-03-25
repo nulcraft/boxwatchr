@@ -44,3 +44,11 @@ jobs:
             ghcr.io/nulcraft/boxwatchr:latest
             nulcraft/boxwatchr:${{ steps.version.outputs.version }}
             nulcraft/boxwatchr:latest
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: nulcraft/boxwatchr
+          readme-filepath: ./DOCKER_HUB.md
