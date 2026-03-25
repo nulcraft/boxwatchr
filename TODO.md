@@ -25,6 +25,7 @@ Self-hosted IMAP email filtering daemon. Single Docker container with supervisor
         - `logs` table retains all records, but /logs page no longer includes ability to select previous IMAP account for filtering
 - [ ] "**Continue After Match** / **Stop After Match**" flags
     - Add per-rule "Continue After Match" vs "Stop After Match" select. Default is to Stop After Match. This will allow chaining rules, such as having a "Learn Ham" rule that then falls through to the next rule. Rule order will be important.
+- [ ] **Update GitHub Actions workflow to Node.js 24.** The docker-publish.yml workflow uses actions/checkout@v4, docker/build-push-action@v6, and docker/login-action@v3, all of which run on Node.js 20. GitHub is forcing Node.js 24 as the default starting June 2, 2026.
 - [ ] **Investigate threading model for multiple IMAP accounts.** One watch thread per account is the goal. Evaluate whether the current thread-per-account approach is sufficient or whether a more structured concurrency model is needed before implementing multi-account support.
 
 ## Completed Tasks
