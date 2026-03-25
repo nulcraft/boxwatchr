@@ -55,47 +55,38 @@ That's it. You don't need to install Python, Redis, rspamd, or anything else. Th
 
 ## Getting started
 
-### Step 1: Create your folder structure
-
-On your server, create a folder for boxwatchr and set up the directory structure it expects:
+boxwatchr needs two persistent directories on your host: one for config and one for data. Create them wherever you want to store them:
 
 ```
 mkdir -p boxwatchr/config boxwatchr/data
-cd boxwatchr
 ```
 
-### Step 2: Create your environment file (optional)
-
-The `.env` file is optional. If you skip it, the container starts with sensible defaults (PUID/PGID 1000, UTC timezone, random rspamd password). If you want to set specific values, create `config/.env` and copy the following into it:
+### Option 1: Docker run
 
 ```
-PUID=99
-PGID=100
-TZ=UTC
-RSPAMD_PASSWORD=
+docker run -d \
+  --name boxwatchr \
+  --restart on-failure \
+  -p 8143:80 \
+  -p 11334:11334 \
+  -v /path/to/config:/app/config \
+  -v /path/to/data:/app/data \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e TZ=America/New_York \
+  nulcraft/boxwatchr:latest
 ```
 
-**PUID and PGID** are the user ID and group ID that the boxwatchr process will run as inside the container. You want these to match your host user so that files written to your `config/` and `data/` folders are owned by you and not by root. To find your user's IDs, run `id` on your server:
+Replace `/path/to/config` and `/path/to/data` with the actual absolute paths on your server. Docker run does not support relative paths. The `-e` flags are optional. Skip them to use the defaults (PUID/PGID 1000, UTC timezone, random rspamd password).
 
-```
-$ id
-uid=1000(youruser) gid=1000(youruser) groups=...
-```
+### Option 2: Docker Compose
 
-Set `PUID=1000` and `PGID=1000` (or whatever your actual IDs are).
-
-**TZ** is your timezone in standard format, like `America/New_York`, `Europe/London`, or `Australia/Sydney`. All timestamps are stored in UTC and converted to your timezone for display, so you can change this at any time without affecting your data.
-
-**RSPAMD_PASSWORD** is for the rspamd web interface on port 11334. If you leave this blank, boxwatchr generates a random password at every startup. If you want to actually log into the rspamd interface, set a password here so it stays the same between restarts. This field is completely optional and doesn't need to be in your .env file at all.
-
-### Step 3: Create your docker-compose.yml
-
-In your `boxwatchr` folder (not inside `config` or `data`, one level up), create `docker-compose.yml`:
+Create `docker-compose.yml` in your `boxwatchr` folder:
 
 ```yaml
 services:
   boxwatchr:
-    image: ghcr.io/nulcraft/boxwatchr:latest
+    image: nulcraft/boxwatchr:latest
     container_name: boxwatchr
     restart: on-failure
     ports:
@@ -109,33 +100,45 @@ services:
         required: false
 ```
 
-By default the web dashboard runs on port **8143**. Port **11334** is the rspamd web interface. It's optional to expose it, but useful if you want to see what rspamd is doing.
-
-Your folder structure should now look like this:
+Optionally create `config/.env` to set environment variables:
 
 ```
-boxwatchr/
-├── docker-compose.yml
-├── config/
-│   ├── .env
-│   └── rspamd/
-│       └── local.d/    (optional rspamd config overrides)
-└── data/          (this will fill up automatically)
+PUID=1000
+PGID=1000
+TZ=America/New_York
+RSPAMD_PASSWORD=
 ```
 
-### Step 4: Start it up
+Then start it:
 
 ```
 docker compose up -d
 ```
 
-The first startup takes a moment because rspamd and the DNS resolver need to initialize. Give it 15-30 seconds. Then open your browser and go to:
+### After starting
+
+By default the web dashboard runs on port **8143**. Port **11334** is the rspamd web interface, which is optional to expose. The first startup takes 15-30 seconds for rspamd and the DNS resolver to initialize. Then open:
 
 ```
 http://your-server-ip:8143
 ```
 
 You'll be taken directly to the setup wizard.
+
+---
+
+### Environment variables
+
+**PUID and PGID** are the user ID and group ID that the boxwatchr process runs as inside the container. Match these to your host user so files written to `config/` and `data/` are owned by you and not root. Run `id` on your server to find your values:
+
+```
+$ id
+uid=1000(youruser) gid=1000(youruser) groups=...
+```
+
+**TZ** is your timezone in standard format, like `America/New_York`, `Europe/London`, or `Australia/Sydney`. Timestamps are stored in UTC and converted at display time, so you can change this anytime without affecting your data.
+
+**RSPAMD_PASSWORD** is the password for the rspamd web interface on port 11334. If left blank, a random password is generated at every startup. Set one here if you want consistent access across restarts.
 
 ---
 

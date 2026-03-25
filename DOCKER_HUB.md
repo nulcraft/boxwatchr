@@ -27,27 +27,33 @@ boxwatchr connects to your email account over IMAP and for every new message it:
 
 ## Getting started
 
-Create the folder structure on your server:
+Create two directories on your server for persistent storage:
 
 ```
 mkdir -p boxwatchr/config boxwatchr/data
-cd boxwatchr
 ```
 
-Optionally create `config/.env` to set your user ID, timezone, and rspamd password:
+### Option 1: Docker run
 
 ```
-PUID=1000
-PGID=1000
-TZ=America/New_York
-RSPAMD_PASSWORD=
+docker run -d \
+  --name boxwatchr \
+  --restart on-failure \
+  -p 8143:80 \
+  -p 11334:11334 \
+  -v /path/to/config:/app/config \
+  -v /path/to/data:/app/data \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e TZ=America/New_York \
+  nulcraft/boxwatchr:latest
 ```
 
-Run `id` on your server to get your `PUID` and `PGID`. If you skip the `.env` file the container starts with sensible defaults.
+Replace `/path/to/config` and `/path/to/data` with absolute paths on your server. The `-e` flags are optional. Skip them to use the defaults (PUID/PGID 1000, UTC timezone, random rspamd password).
 
----
+### Option 2: Docker Compose
 
-## docker-compose.yml
+Create `docker-compose.yml` in your `boxwatchr` folder:
 
 ```yaml
 services:
@@ -65,6 +71,17 @@ services:
       - path: ./config/.env
         required: false
 ```
+
+Optionally create `config/.env` to set environment variables:
+
+```
+PUID=1000
+PGID=1000
+TZ=America/New_York
+RSPAMD_PASSWORD=
+```
+
+Then start it:
 
 ```
 docker compose up -d
