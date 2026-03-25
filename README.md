@@ -1,4 +1,4 @@
-# boxwatchr
+# > boxwatchr
 
 A self-hosted email filtering daemon that watches your IMAP mailbox, scores every incoming message with a spam engine, runs it through your custom rules, and takes action automatically. No cloud, no subscriptions, just your server doing exactly what you tell it to.
 
