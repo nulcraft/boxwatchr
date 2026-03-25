@@ -25,7 +25,6 @@ Self-hosted IMAP email filtering daemon. Single Docker container with supervisor
         - `logs` table retains all records, but /logs page no longer includes ability to select previous IMAP account for filtering
 - [ ] "**Continue After Match** / **Stop After Match**" flags
     - Add per-rule "Continue After Match" vs "Stop After Match" select. Default is to Stop After Match. This will allow chaining rules, such as having a "Learn Ham" rule that then falls through to the next rule. Rule order will be important.
-- [ ] **Reduce database.py connection boilerplate** with a context manager. Every read function repeats the same `conn = get_connection() / try / finally conn.close()` pattern ~20 times. A `with get_connection() as conn:` pattern via a `contextmanager` helper would eliminate the repetition with no dependency changes and no architecture changes.
 - [ ] **Investigate threading model for multiple IMAP accounts.** One watch thread per account is the goal. Evaluate whether the current thread-per-account approach is sufficient or whether a more structured concurrency model is needed before implementing multi-account support.
 
 ## Completed Tasks
@@ -33,3 +32,5 @@ Self-hosted IMAP email filtering daemon. Single Docker container with supervisor
 - [x] **Investigate proper GIT handling** for Claude so I can focus more on issues and code changes as opposed to figuring out how Github actually works (for now...I really need to learn Git shit) (**2026-03-24**, no PR link for this)
 - [x] **Periodic rescan** to catch emails missed by IMAP IDLE (**2026-03-24**, [#11](https://github.com/nulcraft/boxwatchr/pull/11))
     - Implemented as a 5-minute interval inside the IDLE loop. The IDLE session terminates early when the interval is due, `startup_scan()` runs against the DB, then IDLE resumes. Polling mode does not need this since it already catches missed messages on the next cycle.
+- [x] **Reduced database.py connection boilerplate** with a `_db()` context manager (**2026-03-24**, [#13](https://github.com/nulcraft/boxwatchr/pull/13))
+    - Replaced the repeated `get_connection() / try / finally conn.close()` pattern across all database functions and web modules. The context manager is exported as `db_connection` for use outside the module. `_flush()` retains direct connection handling due to its re-queue logic on failure.
