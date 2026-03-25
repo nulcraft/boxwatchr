@@ -101,6 +101,68 @@
     opacity: 1;
 }
 
+.site-version {
+    font-size: var(--fz-xs);
+    font-weight: 400;
+    color: var(--bs-secondary-color);
+    opacity: 0.5;
+    margin-left: 6px;
+    vertical-align: middle;
+    letter-spacing: 0;
+}
+
+/* ============================================================
+   Update toast
+   ============================================================ */
+
+#update-toast {
+    background-color: #1a1e24;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    min-width: 300px;
+}
+
+#update-toast .toast-header {
+    background-color: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--c-primary-subtle);
+}
+
+.update-toast-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--c-primary-ui);
+    flex-shrink: 0;
+}
+
+#update-toast .toast-body {
+    color: var(--bs-body-color);
+    font-size: var(--fz-sm);
+}
+
+#update-toast .toast-body a {
+    color: var(--c-primary-ui);
+}
+
+.btn-link-muted {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: inherit;
+    font-family: inherit;
+    color: var(--bs-secondary-color);
+    opacity: 0.7;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.btn-link-muted:hover {
+    opacity: 1;
+    color: var(--bs-body-color);
+}
+
 /* ============================================================
    Typography
    ============================================================ */

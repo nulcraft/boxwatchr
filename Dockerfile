@@ -47,6 +47,7 @@ RUN pip install --break-system-packages --no-cache-dir -r requirements.txt --roo
 # Copy the rest of the application code.
 COPY boxwatchr/ ./boxwatchr/
 COPY main.py .
+COPY VERSION .
 
 # The .env file and rules.yaml are NOT copied into the image.
 # They are mounted as a volume at runtime so users can edit them

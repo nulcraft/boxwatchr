@@ -24,6 +24,7 @@ def config_page():
         log_level=config.LOG_LEVEL,
         dry_run=config.DRYRUN,
         db_prune_days=config.DB_PRUNE_DAYS,
+        check_for_updates=config.CHECK_FOR_UPDATES,
         has_password=bool(config.WEB_PASSWORD),
         tls_mode=config.IMAP_TLS_MODE,
         show_logout=bool(config.WEB_PASSWORD),
