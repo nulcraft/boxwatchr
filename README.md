@@ -31,6 +31,31 @@ Think of it like email filters on steroids, with a spam engine backing up every 
 
 ---
 
+## Screenshots
+
+<table width="100%">
+  <tr>
+    <td><a href="screenshots/01-login.png"><img src="screenshots/01-login.png" width="100%"></a></td>
+    <td><a href="screenshots/02-dashboard.png"><img src="screenshots/02-dashboard.png" width="100%"></a></td>
+    <td><a href="screenshots/03-emails.png"><img src="screenshots/03-emails.png" width="100%"></a></td>
+    <td><a href="screenshots/04-email-detail.png"><img src="screenshots/04-email-detail.png" width="100%"></a></td>
+  </tr>
+  <tr>
+    <td><a href="screenshots/05-rules.png"><img src="screenshots/05-rules.png" width="100%"></a></td>
+    <td><a href="screenshots/06-new-rule.png"><img src="screenshots/06-new-rule.png" width="100%"></a></td>
+    <td><a href="screenshots/07-export-rules.png"><img src="screenshots/07-export-rules.png" width="100%"></a></td>
+    <td><a href="screenshots/08-import-rules.png"><img src="screenshots/08-import-rules.png" width="100%"></a></td>
+  </tr>
+  <tr>
+    <td><a href="screenshots/09-logs-debug.png"><img src="screenshots/09-logs-debug.png" width="100%"></a></td>
+    <td><a href="screenshots/10-logs-info.png"><img src="screenshots/10-logs-info.png" width="100%"></a></td>
+    <td><a href="screenshots/11-config.png"><img src="screenshots/11-config.png" width="100%"></a></td>
+    <td></td>
+  </tr>
+</table>
+
+---
+
 ## What you need
 
 - **Docker** and **Docker Compose** installed on your server
