@@ -57,11 +57,14 @@
 
 .site-nav {
     background-color: var(--surface-nav);
-    min-height: 52px;
+    
     border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
 
 .site-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     background: linear-gradient(to bottom, var(--c-primary-brand), var(--c-primary-grad));
     -webkit-background-clip: text;
     background-clip: text;
@@ -69,10 +72,9 @@
     letter-spacing: 1px;
 }
 
-.site-brand::before {
-    content: "> ";
-    -webkit-text-fill-color: var(--c-primary-prefix);
-    color: var(--c-primary-prefix);
+.site-logo-icon {
+    width: 48px;
+    flex-shrink: 0;
 }
 
 .site-nav-link {
@@ -104,10 +106,10 @@
 .site-version {
     font-size: var(--fz-xs);
     font-weight: 400;
+    -webkit-text-fill-color: var(--bs-secondary-color);
     color: var(--bs-secondary-color);
     opacity: 0.5;
-    margin-left: 6px;
-    vertical-align: middle;
+    margin-left: 4px;
     letter-spacing: 0;
 }
 

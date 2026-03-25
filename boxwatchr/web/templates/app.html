@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}boxwatchr{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/logo-128.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12,25 +14,27 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body>
-    <nav class="navbar navbar-expand-md site-nav border-bottom px-3 px-md-4">
-        <a class="navbar-brand site-brand fw-bold" href="/">boxwatchr</a><span class="site-version">{{ app_version }}</span>
-        <button class="navbar-toggler border-0 ms-auto" type="button"
-                data-bs-toggle="collapse" data-bs-target="#navMenu"
-                aria-controls="navMenu" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse ms-md-3" id="navMenu">
-            <div class="d-flex flex-column flex-md-row gap-2 py-2 py-md-0 align-items-md-center w-100">
-                {% if not setup_mode %}
-                <a href="/dashboard" class="nav-link site-nav-link{% if request.path == '/dashboard' %} active{% endif %}">dashboard</a>
-                <a href="/emails" class="nav-link site-nav-link{% if request.path.startswith('/emails') %} active{% endif %}">emails</a>
-                <a href="/rules" class="nav-link site-nav-link{% if request.path.startswith('/rules') %} active{% endif %}">rules</a>
-                <a href="/logs" class="nav-link site-nav-link{% if request.path == '/logs' %} active{% endif %}">logs</a>
-                <a href="/config" class="nav-link site-nav-link{% if request.path == '/config' %} active{% endif %}">config</a>
-                {% if show_logout %}
-                <a href="/logout" class="nav-link site-nav-link site-nav-logout small ms-md-auto">logout</a>
-                {% endif %}
-                {% endif %}
+    <nav class="navbar navbar-expand-md site-nav border-bottom">
+        <div class="container-xl px-3 px-md-4">
+            <a class="navbar-brand site-brand fw-bold" href="/"><img src="{{ url_for('static', filename='images/logo.png') }}" alt="" class="site-logo-icon"><span class="site-brand-text">boxwatchr<span class="site-version">{{ app_version }}</span></span></a>
+            <button class="navbar-toggler border-0 ms-auto" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#navMenu"
+                    aria-controls="navMenu" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navMenu">
+                <div class="d-flex flex-column flex-md-row gap-2 py-2 py-md-0 align-items-md-center ms-md-auto">
+                    {% if not setup_mode %}
+                    <a href="/dashboard" class="nav-link site-nav-link{% if request.path == '/dashboard' %} active{% endif %}">dashboard</a>
+                    <a href="/emails" class="nav-link site-nav-link{% if request.path.startswith('/emails') %} active{% endif %}">emails</a>
+                    <a href="/rules" class="nav-link site-nav-link{% if request.path.startswith('/rules') %} active{% endif %}">rules</a>
+                    <a href="/logs" class="nav-link site-nav-link{% if request.path == '/logs' %} active{% endif %}">logs</a>
+                    <a href="/config" class="nav-link site-nav-link{% if request.path == '/config' %} active{% endif %}">config</a>
+                    {% if show_logout %}
+                    <a href="/logout" class="nav-link site-nav-link site-nav-logout small ms-md-auto">logout</a>
+                    {% endif %}
+                    {% endif %}
+                </div>
             </div>
         </div>
     </nav>
