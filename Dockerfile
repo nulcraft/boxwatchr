@@ -34,6 +34,10 @@ COPY docker/unbound.conf /etc/unbound/unbound.conf
 COPY docker/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
+# Bake in rspamd local.d overrides: disable unused workers and modules.
+# User-provided overrides in /app/config/rspamd/local.d/ are applied on top at runtime.
+COPY docker/rspamd/ /etc/rspamd/local.d/
+
 # Set the working directory for the application.
 WORKDIR /app
 
