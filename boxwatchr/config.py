@@ -26,6 +26,7 @@ LOG_LEVEL = "INFO"
 DRYRUN = False
 WEB_PASSWORD = ""
 DB_PRUNE_DAYS = 0
+CHECK_FOR_UPDATES = True
 
 def load():
     """Load app settings from the database. Call after database.initialize()."""
@@ -35,7 +36,7 @@ def load():
     global ACCOUNT_ID, ACCOUNT_NAME
     global IMAP_HOST, IMAP_PORT, IMAP_USERNAME, IMAP_PASSWORD
     global IMAP_FOLDER, IMAP_POLL_INTERVAL, IMAP_TLS_MODE
-    global LOG_LEVEL, DRYRUN, WEB_PASSWORD, DB_PRUNE_DAYS
+    global LOG_LEVEL, DRYRUN, WEB_PASSWORD, DB_PRUNE_DAYS, CHECK_FOR_UPDATES
 
     SETUP_COMPLETE = get_config("setup_complete", "false") == "true"
 
@@ -55,6 +56,7 @@ def load():
     DRYRUN = get_config("dry_run", "false") == "true"
     WEB_PASSWORD = get_config("web_password", "")
     DB_PRUNE_DAYS = int(get_config("db_prune_days", "0"))
+    CHECK_FOR_UPDATES = get_config("check_for_updates", "true") == "true"
 
     _update_log_level()
 

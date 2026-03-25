@@ -2,6 +2,7 @@ import threading
 import time
 import urllib.request
 from flask import jsonify
+from boxwatchr import config
 from boxwatchr.web.app import app, APP_VERSION
 
 _cache_lock = threading.Lock()
@@ -29,6 +30,8 @@ def _fetch_latest():
 
 @app.route("/api/version/check")
 def version_check():
+    if not config.CHECK_FOR_UPDATES:
+        return jsonify({"current": APP_VERSION, "latest": None, "update_available": False})
     latest = _fetch_latest()
     if latest is None:
         return jsonify({"current": APP_VERSION, "latest": None, "update_available": False})

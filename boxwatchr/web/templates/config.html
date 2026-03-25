@@ -91,6 +91,14 @@
                         <option value="false" {% if not dry_run %}selected{% endif %}>Disabled</option>
                     </select>
                 </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label">Check for Updates</label>
+                    <select name="check_for_updates" class="form-select">
+                        <option value="true" {% if check_for_updates %}selected{% endif %}>Enabled</option>
+                        <option value="false" {% if not check_for_updates %}selected{% endif %}>Disabled</option>
+                    </select>
+                    <div class="form-text">When enabled, the dashboard checks GitHub for a newer version once per session.</div>
+                </div>
             </div>
         </div>
     </div>

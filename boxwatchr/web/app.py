@@ -165,6 +165,7 @@ def _save_app_config(form):
         db_prune_days = 0
 
     dry_run = form.get("dry_run") == "true"
+    check_for_updates = form.get("check_for_updates") != "false"
 
     disable_password = form.get("disable_password") == "1"
     new_web_password_raw = form.get("web_password", "")
@@ -180,6 +181,7 @@ def _save_app_config(form):
         "dry_run": "true" if dry_run else "false",
         "web_password": web_password_stored,
         "db_prune_days": str(db_prune_days),
+        "check_for_updates": "true" if check_for_updates else "false",
     })
 
     return web_password_stored
