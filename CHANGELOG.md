@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Removed `delete` and `spam` from the action type dropdown in the rule form. Both were removed from `valid_actions` in 1.0.12 but left in the template, causing "Rule is invalid" if either was selected. (#48)
+
 ## [1.0.13] - 2026-03-26
 
 ### Fixed
