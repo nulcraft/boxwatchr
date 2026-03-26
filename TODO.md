@@ -31,11 +31,3 @@ Self-hosted IMAP email filtering daemon. Single Docker container with supervisor
 ## Completed Tasks
 
 - [x] **Investigate proper GIT handling** for Claude so I can focus more on issues and code changes as opposed to figuring out how Github actually works (for now...I really need to learn Git shit) (**2026-03-24**, no PR link for this)
-- [x] **Periodic rescan** to catch emails missed by IMAP IDLE (**2026-03-24**, [#11](https://github.com/nulcraft/boxwatchr/pull/11))
-    - Implemented as a 5-minute interval inside the IDLE loop. The IDLE session terminates early when the interval is due, `startup_scan()` runs against the DB, then IDLE resumes. Polling mode does not need this since it already catches missed messages on the next cycle.
-- [x] **Reduced database.py connection boilerplate** with a `_db()` context manager (**2026-03-24**, [#13](https://github.com/nulcraft/boxwatchr/pull/13))
-    - Replaced the repeated `get_connection() / try / finally conn.close()` pattern across all database functions and web modules. The context manager is exported as `db_connection` for use outside the module. `_flush()` retains direct connection handling due to its re-queue logic on failure.
-- [x] **Version label and update check toast** (**2026-03-25**, [#15](https://github.com/nulcraft/boxwatchr/pull/15))
-    - Shows the running version in the navbar. Checks GitHub for a newer version once per browser session and shows a toast bottom-right with a changelog link, session-dismiss, and per-version "Don't show again." Configurable via a Check for Updates toggle on the config page.
-- [x] **Renamed rule condition field labels for clarity** (**2026-03-26**, [#36](https://github.com/nulcraft/boxwatchr/pull/36))
-    - Removed em dashes and redundant Sender/Recipient prefix from dropdown options. Renamed "local part (before @)" to "Username", "domain name" to "Subdomain + domain", and "domain root" to "Domain (no subdomain)". Updated help text and README to match.
