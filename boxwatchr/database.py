@@ -16,7 +16,7 @@ logger = get_logger("boxwatchr.database")
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "boxwatchr.db")
 
-CURRENT_VERSION = 1
+CURRENT_VERSION = 2
 
 _log_queue = collections.deque()
 _email_queue = collections.deque()
@@ -59,8 +59,14 @@ def _get_version(conn):
 def _set_version(conn, version):
     conn.execute(f"PRAGMA user_version = {version}")
 
+def _migrate_v1_to_v2(conn):
+    logger.info("Migrating database schema from v1 to v2 (adding content_hash)")
+    conn.execute("ALTER TABLE emails ADD COLUMN content_hash TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_content_hash ON emails (content_hash)")
+    logger.info("Migration v1 to v2 complete")
+
 def _create_schema(conn):
-    logger.info("Creating database schema (v1)")
+    logger.info("Creating database schema (v2)")
 
     conn.execute("""
         CREATE TABLE accounts (
@@ -115,10 +121,12 @@ def _create_schema(conn):
             processed_notes TEXT,
             message_id TEXT,
             rspamd_learned TEXT,
+            content_hash TEXT,
             UNIQUE(uid, folder, account_id)
         )
     """)
     conn.execute("CREATE INDEX idx_emails_message_id ON emails (message_id)")
+    conn.execute("CREATE INDEX idx_emails_content_hash ON emails (content_hash)")
     logger.debug("Emails table created")
 
     conn.execute("""
@@ -162,10 +170,18 @@ def initialize():
                 )
                 raise RuntimeError("Database version is newer than the application supports")
 
-            _create_schema(conn)
-            _set_version(conn, CURRENT_VERSION)
-            conn.commit()
-            logger.info("Database initialized at version %s", CURRENT_VERSION)
+            if current_version == 0:
+                _create_schema(conn)
+                _set_version(conn, CURRENT_VERSION)
+                conn.commit()
+                logger.info("Database initialized at version %s", CURRENT_VERSION)
+                return
+
+            if current_version < 2:
+                _migrate_v1_to_v2(conn)
+                _set_version(conn, 2)
+                conn.commit()
+                logger.info("Database migrated to version 2")
 
     except sqlite3.Error as e:
         logger.error("Failed to initialize database: %s", e)
@@ -433,8 +449,8 @@ def _flush():
                 INSERT INTO emails (
                     id, account_id, uid, folder, sender, recipients, subject, date_received, message_size,
                     spam_score, rule_matched, actions, history, raw_headers, attachments,
-                    processed, processed_at, processed_notes, message_id, rspamd_learned
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    processed, processed_at, processed_notes, message_id, rspamd_learned, content_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(uid, folder, account_id) DO UPDATE SET
                     sender = excluded.sender,
                     recipients = excluded.recipients,
@@ -448,7 +464,7 @@ def _flush():
                 item["spam_score"], item["rule_matched"], item["actions"], item["history"],
                 item["raw_headers"], item["attachments"],
                 item["processed"], item["processed_at"], item["processed_notes"],
-                item["message_id"], item["rspamd_learned"]
+                item["message_id"], item["rspamd_learned"], item.get("content_hash")
             ))
 
         for item in updates_batch:
@@ -536,6 +552,19 @@ def clear_email_id_from_logs(email_id):
             if entry.get("email_id") == email_id:
                 entry["email_id"] = None
 
+def get_email_by_content_hash(content_hash):
+    if not content_hash:
+        return None
+    try:
+        with _db() as conn:
+            return conn.execute(
+                "SELECT * FROM emails WHERE content_hash = ?",
+                (content_hash,)
+            ).fetchone()
+    except sqlite3.Error as e:
+        logger.error("Failed to query email by content_hash: %s", e)
+        return None
+
 def get_email_by_message_id(message_id):
     if not message_id:
         return None
@@ -562,7 +591,7 @@ def update_email_uid(email_id, uid):
 def enqueue_email(uid, folder, sender, recipients, subject, date_received, message_size,
                   spam_score, rule_matched, actions, raw_headers, attachments, processed,
                   processed_at, processed_notes, email_id=None, history=None,
-                  message_id=None, rspamd_learned=None, account_id=None):
+                  message_id=None, rspamd_learned=None, account_id=None, content_hash=None):
     with _queue_lock:
         _email_queue.append({
             "id": email_id,
@@ -585,6 +614,7 @@ def enqueue_email(uid, folder, sender, recipients, subject, date_received, messa
             "processed_notes": processed_notes,
             "message_id": message_id,
             "rspamd_learned": rspamd_learned,
+            "content_hash": content_hash,
         })
         queue_size = len(_email_queue)
     logger.debug("Enqueued email uid=%s id=%s (email queue size: %s)", uid, email_id, queue_size)
