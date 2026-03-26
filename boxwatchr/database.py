@@ -60,7 +60,7 @@ def _get_version(conn):
 def _set_version(conn, version):
     conn.execute(f"PRAGMA user_version = {version}")
 
-def _compute_content_hash(sender, subject, date_received, recipients):
+def compute_content_hash(sender, subject, date_received, recipients):
     parts = "|".join([
         (sender or "").lower(),
         subject or "",
@@ -78,7 +78,7 @@ def _migrate_v1_to_v2(conn):
     ).fetchall()
     for row in rows:
         recipient_list = [r for r in (row["recipients"] or "").split(",") if r]
-        h = _compute_content_hash(row["sender"], row["subject"], row["date_received"], recipient_list)
+        h = compute_content_hash(row["sender"], row["subject"], row["date_received"], recipient_list)
         conn.execute("UPDATE emails SET content_hash = ? WHERE id = ?", (h, row["id"]))
     logger.info("Migration v1 to v2 complete: backfilled content_hash for %s existing record(s)", len(rows))
 

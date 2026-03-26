@@ -5,7 +5,7 @@ from flask import render_template, request, redirect, url_for, abort, flash
 from boxwatchr import config, imap, spam
 from boxwatchr.database import db_connection, get_rule, insert_rule, update_rule, enqueue_email_update
 from boxwatchr.notes import action_sentence
-from boxwatchr.rules import validate_rule, check_rule, reload_rules, TERMINAL_ACTIONS
+from boxwatchr.rules import validate_rule, check_rule, load_rules, TERMINAL_ACTIONS
 from boxwatchr.web.app import app, _require_auth, _require_csrf, _check_csrf, logger
 from boxwatchr.web.rules import _FIELD_LABELS, _ACTION_LABELS
 
@@ -61,7 +61,7 @@ def rule_new():
                     conditions_json=json.dumps(validated["conditions"]),
                     actions_json=json.dumps(validated["actions"]),
                 )
-                reload_rules()
+                load_rules()
                 logger.info("User created rule '%s'", validated["name"])
                 return redirect(url_for("rules_list"))
             except Exception as e:
@@ -111,7 +111,7 @@ def rule_edit(rule_id):
                     conditions_json=json.dumps(validated["conditions"]),
                     actions_json=json.dumps(validated["actions"]),
                 )
-                reload_rules()
+                load_rules()
                 logger.info("User updated rule '%s'", validated["name"])
                 return redirect(url_for("rules_list"))
             except Exception as e:

@@ -321,7 +321,7 @@ def execute_action(client, action, uid, email_id=None):
         flag_message(client, uid, email_id=email_id)
     elif action_type == "unflag":
         unflag_message(client, uid, email_id=email_id)
-    elif action_type in {"move", "delete", "spam"}:
+    elif action_type == "move":
         move_message(client, uid, dest, email_id=email_id)
     else:
         logger.warning("Unknown action type %r for UID %s", action_type, uid, extra={"email_id": email_id})

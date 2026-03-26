@@ -1,5 +1,3 @@
-import collections
-import json
 import sqlite3
 from flask import render_template
 from boxwatchr import config
@@ -21,16 +19,12 @@ def _get_stats():
             ).fetchone()[0]
 
             rule_rows = conn.execute(
-                "SELECT rule_matched FROM emails WHERE rule_matched IS NOT NULL"
+                "SELECT JSON_EXTRACT(rule_matched, '$.name') AS rule_name, COUNT(*) AS cnt"
+                " FROM emails WHERE rule_matched IS NOT NULL"
+                " GROUP BY rule_name ORDER BY cnt DESC"
             ).fetchall()
 
-            rule_counts = collections.Counter()
-            for row in rule_rows:
-                try:
-                    rule = json.loads(row["rule_matched"])
-                    rule_counts[rule["name"]] += 1
-                except (json.JSONDecodeError, KeyError):
-                    pass
+            rule_counts = [(row["rule_name"], row["cnt"]) for row in rule_rows if row["rule_name"]]
 
             score_rows = conn.execute(
                 "SELECT spam_score FROM emails WHERE spam_score IS NOT NULL"
@@ -57,7 +51,7 @@ def _get_stats():
                 "pending": pending,
                 "spam_caught": spam_caught,
                 "ham_learned": ham_learned,
-                "rule_counts": rule_counts.most_common(),
+                "rule_counts": rule_counts,
                 "score_buckets": buckets,
             }
     except sqlite3.Error as e:

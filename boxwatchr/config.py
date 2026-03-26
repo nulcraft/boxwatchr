@@ -64,8 +64,11 @@ def reload():
     load()
 
 def _update_log_level():
+    from boxwatchr.logger import DatabaseHandler
     for name in logging.Logger.manager.loggerDict:
         log = logging.getLogger(name)
         for handler in log.handlers:
-            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+            if isinstance(handler, DatabaseHandler):
+                handler.setLevel(LOG_LEVEL)
+            elif isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
                 handler.setLevel(LOG_LEVEL)

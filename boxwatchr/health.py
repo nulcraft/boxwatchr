@@ -64,7 +64,7 @@ def _check_imap():
     logger.debug("IMAP health check: connecting to %s:%s", config.IMAP_HOST, config.IMAP_PORT)
     try:
         _use_ssl = config.IMAP_TLS_MODE != "none" and config.IMAP_TLS_MODE != "starttls"
-        client = IMAPClient(config.IMAP_HOST, port=config.IMAP_PORT, ssl=_use_ssl)
+        client = IMAPClient(config.IMAP_HOST, port=config.IMAP_PORT, ssl=_use_ssl, timeout=10)
         if config.IMAP_TLS_MODE == "starttls":
             client.starttls()
     except Exception as e:

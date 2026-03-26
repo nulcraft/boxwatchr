@@ -1,4 +1,3 @@
-import hashlib
 import json
 import uuid
 import time
@@ -10,7 +9,7 @@ from boxwatchr import config, imap, spam, rules, health, __version__
 from boxwatchr.web.app import start_dashboard
 from boxwatchr.imap import FatalImapError
 from boxwatchr.notes import action_sentence, failed_action_sentence, skipped_learn_sentence, build_notes_opener
-from boxwatchr.database import set_processing, clear_email_id_from_logs, enqueue_email, enqueue_email_update, get_known_uids, get_unprocessed_emails, get_email_by_content_hash, update_email_uid
+from boxwatchr.database import set_processing, clear_email_id_from_logs, enqueue_email, enqueue_email_update, get_known_uids, get_unprocessed_emails, get_email_by_content_hash, update_email_uid, compute_content_hash
 from boxwatchr.rules import TERMINAL_ACTIONS
 from boxwatchr.logger import get_logger
 
@@ -65,15 +64,6 @@ def _decode(value):
         return str(make_header(decode_header(value)))
     except Exception:
         return value
-
-def _compute_content_hash(sender, subject, date_received, recipients):
-    parts = "|".join([
-        (sender or "").lower(),
-        subject or "",
-        date_received or "",
-        ",".join(sorted(r.lower() for r in (recipients or []))),
-    ])
-    return hashlib.sha256(parts.encode("utf-8")).hexdigest()
 
 def _parse_attachments(raw_message):
     if not raw_message:
@@ -308,7 +298,7 @@ def process_email(client, uid, message, current_uids=None):
         _msg_obj = message_from_string(raw_headers)
         message_id = (_msg_obj.get("Message-ID") or "").strip()
 
-        content_hash = _compute_content_hash(sender, subject, date_received, recipients)
+        content_hash = compute_content_hash(sender, subject, date_received, recipients)
 
         email_id = uuid.uuid4().hex[:12]
 
