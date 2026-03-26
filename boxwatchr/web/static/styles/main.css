@@ -121,12 +121,20 @@
     background-color: #1a1e24;
     border: 1px solid rgba(255, 255, 255, 0.12);
     min-width: 300px;
+    max-width: 360px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.5);
 }
 
 #update-toast .toast-header {
     background-color: rgba(0, 0, 0, 0.3);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     color: var(--c-primary-subtle);
+}
+
+.update-toast-close {
+    width: 0.6em;
+    height: 0.6em;
+    font-size: 0.75rem;
 }
 
 .update-toast-dot {
@@ -145,6 +153,32 @@
 
 #update-toast .toast-body a {
     color: var(--c-primary-ui);
+}
+
+.update-toast-notes {
+    max-height: 25vh;
+    overflow-y: auto;
+}
+
+.update-toast-notes h2 {
+    font-size: var(--fz-sm);
+    font-weight: 600;
+    color: var(--c-primary-subtle);
+    margin-top: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+.update-toast-notes h2:first-child {
+    margin-top: 0;
+}
+
+.update-toast-notes ul {
+    padding-left: 1.1rem;
+    margin-bottom: 0;
+}
+
+.update-toast-notes li {
+    margin-bottom: 0.2rem;
 }
 
 .btn-link-muted {

@@ -19,29 +19,32 @@ def _fetch_latest():
     with _cache_lock:
         if _cache_value is not None and now - _cache_time < _CACHE_TTL:
             return _cache_value
+    release_notes = ""
     try:
         req = urllib.request.Request(_GITHUB_RELEASES_URL, headers={"Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode())
             latest = data["tag_name"].lstrip("v")
+            release_notes = data.get("body", "")
     except Exception:
         return None
     with _cache_lock:
-        _cache_value = latest
+        _cache_value = (latest, release_notes)
         _cache_time = time.monotonic()
-    return latest
+    return latest, release_notes
 
 @app.route("/api/version/check")
 def version_check():
     if not config.CHECK_FOR_UPDATES:
-        return jsonify({"current": APP_VERSION, "latest": None, "update_available": False})
-    latest = _fetch_latest()
-    if latest is None:
-        return jsonify({"current": APP_VERSION, "latest": None, "update_available": False})
+        return jsonify({"current": APP_VERSION, "latest": None, "update_available": False, "release_notes": ""})
+    result = _fetch_latest()
+    if result is None:
+        return jsonify({"current": APP_VERSION, "latest": None, "update_available": False, "release_notes": ""})
+    latest, release_notes = result
     try:
         current_parts = tuple(int(x) for x in APP_VERSION.split("."))
         latest_parts = tuple(int(x) for x in latest.split("."))
         update_available = latest_parts > current_parts
     except ValueError:
         update_available = False
-    return jsonify({"current": APP_VERSION, "latest": latest, "update_available": update_available})
+    return jsonify({"current": APP_VERSION, "latest": latest, "update_available": update_available, "release_notes": release_notes})
