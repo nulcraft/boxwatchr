@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Renamed action dropdown options "Flag message" and "Remove flag" to "Mark as flagged" and "Mark as unflagged" for consistency with "Mark as read" / "Mark as unread".
+- Added a note to the rule form conditions section explaining which address fields normalize punctuation (Username, Subdomain + domain, Domain (no subdomain)) vs. which match the exact text (Full address, Full domain, TLD).
 
 ## [1.0.15] - 2026-03-26
 

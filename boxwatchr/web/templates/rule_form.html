@@ -38,7 +38,7 @@
 
             <div class="mb-3">
                 <p class="text-secondary small mb-1">For an address like <code>user@mail.example.com</code>:</p>
-                <ul class="text-secondary small mb-0 ps-3">
+                <ul class="text-secondary small mb-2 ps-3">
                     <li><strong>Full address:</strong> the entire address (<code>user@mail.example.com</code>)</li>
                     <li><strong>Username:</strong> everything before the @ (<code>user</code>)</li>
                     <li><strong>Full domain:</strong> everything after the @ (<code>mail.example.com</code>)</li>
@@ -46,6 +46,7 @@
                     <li><strong>Domain (no subdomain):</strong> the domain only, no subdomain or TLD (<code>example</code>)</li>
                     <li><strong>TLD:</strong> top-level domain only (<code>com</code>)</li>
                 </ul>
+                <p class="text-secondary small mb-0"><strong>Username</strong>, <strong>Subdomain + domain</strong>, and <strong>Domain (no subdomain)</strong> ignore punctuation when matching — hyphens, dots, and other non-alphanumeric characters are stripped from both the address and your value before comparing. <strong>Full address</strong>, <strong>Full domain</strong>, and <strong>TLD</strong> match the exact text, so your value must include any hyphens or dots as they appear.</p>
             </div>
 
             <div id="conditions-container">
