@@ -80,7 +80,7 @@ def rule_delete(rule_id):
     rule_name = row["name"]
     try:
         delete_rule(rule_id, config.ACCOUNT_ID)
-        _rules_engine.reload_rules()
+        _rules_engine.load_rules()
         logger.info("User deleted rule '%s'", rule_name)
     except Exception as e:
         logger.error("Failed to delete rule '%s': %s", rule_name, e)
@@ -96,7 +96,7 @@ def rule_move_up(rule_id):
         abort(404)
     try:
         move_rule_up(rule_id, config.ACCOUNT_ID)
-        _rules_engine.reload_rules()
+        _rules_engine.load_rules()
     except Exception as e:
         logger.error("Failed to move rule up: %s", e)
     return redirect(url_for("rules_list"))
@@ -111,7 +111,7 @@ def rule_move_down(rule_id):
         abort(404)
     try:
         move_rule_down(rule_id, config.ACCOUNT_ID)
-        _rules_engine.reload_rules()
+        _rules_engine.load_rules()
     except Exception as e:
         logger.error("Failed to move rule down: %s", e)
     return redirect(url_for("rules_list"))
@@ -179,7 +179,7 @@ def rules_import():
             skipped += 1
 
     if imported:
-        _rules_engine.reload_rules()
+        _rules_engine.load_rules()
         logger.info("User imported %s rule(s) (%s duplicate(s), %s skipped)", imported, duplicates, skipped)
 
     parts = ["Imported %s rule(s)." % imported]

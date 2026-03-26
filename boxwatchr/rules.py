@@ -44,9 +44,6 @@ def load_rules(account_id=None):
 
     return validated
 
-def reload_rules(account_id=None):
-    return load_rules(account_id)
-
 def validate_rule(rule):
     name = rule.get("name", "").strip()
     if not name:

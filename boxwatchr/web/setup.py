@@ -15,12 +15,14 @@ def _test_imap_rate_limited():
     now = time.monotonic()
     with _test_imap_lock:
         attempts = [t for t in _test_imap_attempts.get(ip, []) if now - t < _TEST_IMAP_WINDOW]
-        attempts.append(now)
-        _test_imap_attempts[ip] = attempts
         stale = [k for k, v in _test_imap_attempts.items() if k != ip and not any(now - t < _TEST_IMAP_WINDOW for t in v)]
         for k in stale:
             del _test_imap_attempts[k]
-        return len(attempts) > _TEST_IMAP_MAX_ATTEMPTS
+        if len(attempts) >= _TEST_IMAP_MAX_ATTEMPTS:
+            return True
+        attempts.append(now)
+        _test_imap_attempts[ip] = attempts
+        return False
 
 @app.route("/setup", methods=["GET"])
 def setup():

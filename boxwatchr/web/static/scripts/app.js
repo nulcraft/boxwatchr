@@ -1,17 +1,23 @@
 (function () {
     "use strict";
 
-    if (sessionStorage.getItem("bw_update_checked")) return;
+    function getCookie(name) {
+        var match = document.cookie.match(new RegExp("(?:^|; )" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "=([^;]*)"));
+        return match ? decodeURIComponent(match[1]) : null;
+    }
+
+    function setCookie(name, value, days) {
+        var expires = new Date(Date.now() + days * 864e5).toUTCString();
+        document.cookie = name + "=" + encodeURIComponent(value) + "; expires=" + expires + "; path=/; SameSite=Strict";
+    }
 
     fetch("/api/version/check")
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
-            if (!data) return;
-            sessionStorage.setItem("bw_update_checked", "1");
-            if (!data.update_available) return;
+            if (!data || !data.update_available) return;
 
             var latest = data.latest;
-            if (localStorage.getItem("bw_dismissed_version") === latest) return;
+            if (getCookie("bw_skip_version") === latest) return;
 
             var title = document.getElementById("update-toast-title");
             var body = document.getElementById("update-toast-body");
@@ -24,18 +30,17 @@
                 notesHtml = "<div class=\"update-toast-notes\">" + marked.parse(data.release_notes) + "</div>";
             }
 
-            body.innerHTML = notesHtml
-                + "<div class=\"mt-2\">"
-                + "<button type=\"button\" class=\"btn-link-muted\" id=\"update-dismiss-btn\">Don't show again</button>"
-                + "</div>";
+            body.innerHTML = notesHtml;
 
             var el = document.getElementById("update-toast");
             if (!el) return;
 
-            document.getElementById("update-dismiss-btn").addEventListener("click", function () {
-                localStorage.setItem("bw_dismissed_version", latest);
-                bootstrap.Toast.getInstance(el).hide();
-            });
+            var closeBtn = el.querySelector("[data-bs-dismiss=\"toast\"]");
+            if (closeBtn) {
+                closeBtn.addEventListener("click", function () {
+                    setCookie("bw_skip_version", latest, 30);
+                });
+            }
 
             new bootstrap.Toast(el, { autohide: false }).show();
         })
