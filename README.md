@@ -235,15 +235,15 @@ For the following examples, assume the sender address is `newsletter@mail.newsle
 | Dashboard label | Field value | What it matches | Example |
 |---|---|---|---|
 | Sender: full address | `sender` | The entire address | `newsletter@mail.newsletter.example.com` |
-| Sender: local part (before @) | `sender_local` | Everything before the @ | `newsletter` |
+| Sender: username | `sender_local` | Everything before the @ | `newsletter` |
 | Sender: full domain | `sender_domain` | Everything after the @ | `mail.newsletter.example.com` |
-| Sender: domain name | `sender_domain_name` | Subdomain and domain, no TLD | `mail.newsletter.example` |
-| Sender: domain root | `sender_domain_root` | Registered domain only, no subdomain, no TLD | `example` |
+| Sender: subdomain + domain | `sender_domain_name` | Subdomain and domain, no TLD | `mail.newsletter.example` |
+| Sender: domain (no subdomain) | `sender_domain_root` | Domain only, no subdomain or TLD | `example` |
 | Sender: TLD | `sender_domain_tld` | Top-level domain only | `com` |
 
 #### Recipient fields
 
-The same six options exist for the recipient address, using `recipient` instead of `sender` in the drowndown:
+The same six options exist for the recipient address, using `recipient` instead of `sender` in the dropdown:
 
 `recipient`, `recipient_local`, `recipient_domain`, `recipient_domain_name`, `recipient_domain_root`, `recipient_domain_tld`
 
