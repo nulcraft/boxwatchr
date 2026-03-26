@@ -1,3 +1,4 @@
+import hashlib
 import json
 import uuid
 import time
@@ -9,7 +10,7 @@ from boxwatchr import config, imap, spam, rules, health, __version__
 from boxwatchr.web.app import start_dashboard
 from boxwatchr.imap import FatalImapError
 from boxwatchr.notes import action_sentence, failed_action_sentence, skipped_learn_sentence, build_notes_opener
-from boxwatchr.database import set_processing, clear_email_id_from_logs, enqueue_email, enqueue_email_update, get_known_uids, get_unprocessed_emails, get_email_by_message_id, update_email_uid
+from boxwatchr.database import set_processing, clear_email_id_from_logs, enqueue_email, enqueue_email_update, get_known_uids, get_unprocessed_emails, get_email_by_content_hash, update_email_uid
 from boxwatchr.rules import TERMINAL_ACTIONS
 from boxwatchr.logger import get_logger
 
@@ -64,6 +65,15 @@ def _decode(value):
         return str(make_header(decode_header(value)))
     except Exception:
         return value
+
+def _compute_content_hash(sender, subject, date_received, recipients):
+    parts = "|".join([
+        sender or "",
+        subject or "",
+        date_received or "",
+        ",".join(sorted(recipients or [])),
+    ])
+    return hashlib.sha256(parts.encode("utf-8")).hexdigest()
 
 def _parse_attachments(raw_message):
     if not raw_message:
@@ -298,6 +308,8 @@ def process_email(client, uid, message, current_uids=None):
         _msg_obj = message_from_string(raw_headers)
         message_id = (_msg_obj.get("Message-ID") or "").strip()
 
+        content_hash = _compute_content_hash(sender, subject, date_received, recipients)
+
         email_id = uuid.uuid4().hex[:12]
 
         logger.debug(
@@ -306,24 +318,24 @@ def process_email(client, uid, message, current_uids=None):
             extra={"email_id": email_id}
         )
         logger.debug(
-            "Email UID %s: size=%s bytes, date=%s, email_id=%s, message_id=%r",
-            uid, message_size, date_received, email_id, message_id or "(none)",
+            "Email UID %s: size=%s bytes, date=%s, email_id=%s, content_hash=%s",
+            uid, message_size, date_received, email_id, content_hash,
             extra={"email_id": email_id}
         )
 
-        existing = get_email_by_message_id(message_id) if message_id else None
+        existing = get_email_by_content_hash(content_hash)
         if existing is not None:
             clear_email_id_from_logs(email_id)
             existing_uid = int(existing["uid"])
             if current_uids is not None and existing_uid in current_uids:
                 logger.info(
-                    "Email UID %s is a duplicate of UID %s (same Message-ID, both present on server), skipping",
+                    "Email UID %s is a duplicate of UID %s (same content hash, both present on server), skipping",
                     uid, existing["uid"],
                     extra={"email_id": existing["id"]}
                 )
             else:
                 logger.info(
-                    "Email UID %s already tracked via Message-ID (id=%s, previous uid=%s), updating UID",
+                    "Email UID %s already tracked (id=%s, previous uid=%s), updating UID",
                     uid, existing["id"], existing["uid"],
                     extra={"email_id": existing["id"]}
                 )
@@ -455,6 +467,7 @@ def process_email(client, uid, message, current_uids=None):
             message_id=message_id or None,
             rspamd_learned=rspamd_learned,
             account_id=config.ACCOUNT_ID,
+            content_hash=content_hash,
         )
 
         email_enqueued = True
