@@ -13,14 +13,19 @@
             var latest = data.latest;
             if (localStorage.getItem("bw_dismissed_version") === latest) return;
 
+            var title = document.getElementById("update-toast-title");
             var body = document.getElementById("update-toast-body");
-            if (!body) return;
+            if (!title || !body) return;
 
-            body.innerHTML =
-                "<div>" + latest + " is available. You have " + data.current + ".</div>"
-                + "<div class=\"mt-2 d-flex gap-3 align-items-center\">"
-                + "<a href=\"https://github.com/nulcraft/boxwatchr/blob/main/CHANGELOG.md\""
-                + " target=\"_blank\" rel=\"noopener noreferrer\">See what changed &rarr;</a>"
+            title.textContent = "Update " + latest + " Available";
+
+            var notesHtml = "";
+            if (data.release_notes && typeof marked !== "undefined") {
+                notesHtml = "<div class=\"update-toast-notes\">" + marked.parse(data.release_notes) + "</div>";
+            }
+
+            body.innerHTML = notesHtml
+                + "<div class=\"mt-2\">"
                 + "<button type=\"button\" class=\"btn-link-muted\" id=\"update-dismiss-btn\">Don't show again</button>"
                 + "</div>";
 
