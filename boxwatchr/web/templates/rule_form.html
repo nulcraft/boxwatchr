@@ -122,8 +122,6 @@
                 <div class="action-row d-flex gap-2 align-items-start mb-2 flex-wrap flex-sm-nowrap">
                     <select name="action_type" class="form-select action-type">
                         <option value="move" {% if a.type == "move" %}selected{% endif %}>Move to folder</option>
-                        <option value="delete" {% if a.type == "delete" %}selected{% endif %}>Delete</option>
-                        <option value="spam" {% if a.type == "spam" %}selected{% endif %}>Mark as spam</option>
                         <option value="mark_read" {% if a.type == "mark_read" %}selected{% endif %}>Mark as read</option>
                         <option value="mark_unread" {% if a.type == "mark_unread" %}selected{% endif %}>Mark as unread</option>
                         <option value="flag" {% if a.type == "flag" %}selected{% endif %}>Flag message</option>
@@ -215,8 +213,6 @@
     <div class="action-row d-flex gap-2 align-items-start mb-2 flex-wrap flex-sm-nowrap">
         <select name="action_type" class="form-select action-type">
             <option value="move">Move to folder</option>
-            <option value="delete">Delete</option>
-            <option value="spam">Mark as spam</option>
             <option value="mark_read">Mark as read</option>
             <option value="mark_unread">Mark as unread</option>
             <option value="flag">Flag message</option>
