@@ -139,6 +139,8 @@
 }
 
 .site-nav-logout {
+    background: none;
+    border: none;
     opacity: 0.6;
 }
 

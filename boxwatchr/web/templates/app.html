@@ -33,7 +33,7 @@
                     <a href="/config" class="nav-link site-nav-link{% if request.path == '/config' %} active{% endif %}"><i class="bi bi-gear-fill site-nav-icon"></i>config</a>
                     {% if show_logout %}
                     <form method="post" action="/logout" class="ms-md-auto">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="nav-link site-nav-link site-nav-logout small">logout</button>
                     </form>
                     {% endif %}
