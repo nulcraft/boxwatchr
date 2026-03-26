@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.11] - 2026-03-26
+
 ### Fixed
-- Emails manually moved out of Junk back to the monitored folder are no longer re-processed. Dedup now uses a SHA-256 hash of sender, subject, date, and recipients rather than the Message-ID header, which is not present on all messages.
+- Emails manually moved out of Junk back to the monitored folder are no longer re-processed. Dedup now uses a SHA-256 hash of sender, subject, date, and recipients rather than the Message-ID header, which is not present on all messages. (#41, #42)
 
 ## [1.0.10] - 2026-03-26
 
