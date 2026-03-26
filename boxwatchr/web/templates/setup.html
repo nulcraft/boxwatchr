@@ -4,12 +4,12 @@
 {% block content %}
 {% if completed %}
 <div class="text-center py-5">
-    <h1 class="h4 fw-semibold mb-3">Setup Complete</h1>
+    <h1 class="h4 fw-semibold mb-3 page-title"><i class="bi bi-check-lg page-title-icon"></i>Setup Complete</h1>
     <p class="text-secondary mb-4">Your configuration has been saved. Restart the container to begin monitoring.</p>
     <code class="d-block text-secondary small">docker compose restart</code>
 </div>
 {% else %}
-<h1 class="h4 fw-semibold mb-1">Setup</h1>
+<h1 class="h4 fw-semibold mb-1 page-title"><i class="bi bi-box-arrow-in-right page-title-icon"></i>Setup</h1>
 <p class="text-secondary small mb-4">Configure boxwatchr before it starts monitoring your inbox.</p>
 
 {% if errors %}

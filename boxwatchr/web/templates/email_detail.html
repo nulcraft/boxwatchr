@@ -2,10 +2,7 @@
 {% block title %}boxwatchr / Email Detail ({{ email.id[:8] }}){% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center gap-3 mb-4">
-    <a href="/emails" class="text-secondary text-decoration-none small">&larr; Emails</a>
-    <h1 class="h4 fw-semibold mb-0">Email Detail ({{ email.id[:8] }})</h1>
-</div>
+<h1 class="h4 fw-semibold mb-4 page-title"><i class="bi bi-envelope-open-fill page-title-icon"></i>Email Detail ({{ email.id[:8] }})</h1>
 
 <div class="card mb-4">
     <div class="card-body">
@@ -187,7 +184,4 @@
 </div>
 {% endif %}
 
-<p class="small mb-0">
-    <a href="/emails" class="text-secondary">&larr; Back to emails</a>
-</p>
 {% endblock %}

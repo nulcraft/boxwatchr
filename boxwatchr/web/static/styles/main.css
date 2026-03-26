@@ -52,6 +52,41 @@
 }
 
 /* ============================================================
+   Page titles
+   ============================================================ */
+
+.page-title {
+    background: linear-gradient(to bottom, #ffffff 0 25%, #dddddd 50% 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    position: relative;
+    padding-bottom: 3px;
+    padding-left: 3px;
+    font-size: 18px;
+    text-transform: uppercase;
+}
+
+.page-title-icon {
+    -webkit-text-fill-color: #bbbbbb;
+    font-size: 0.9em;
+    flex-shrink: 0;
+}
+
+.page-title::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: calc(100% + 40px);
+    height: 1px;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0.15) calc(100% - 40px), transparent 100%);
+}
+
+/* ============================================================
    Navigation
    ============================================================ */
 
@@ -78,10 +113,18 @@
 }
 
 .site-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     color: var(--bs-secondary-color);
     border-radius: 6px;
     padding: 4px 12px !important;
     transition: background-color 0.15s, color 0.15s;
+}
+
+.site-nav-icon {
+    font-size: 0.8em;
+    flex-shrink: 0;
 }
 
 .site-nav-link:hover {

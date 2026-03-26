@@ -2,10 +2,7 @@
 {% block title %}boxwatchr / {% if rule.id %}Edit Rule{% else %}New Rule{% endif %}{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center gap-3 mb-4">
-    <a href="/rules" class="text-secondary text-decoration-none small">&larr; Rules</a>
-    <h1 class="h4 fw-semibold mb-0">{% if rule.id %}Edit Rule{% else %}New Rule{% endif %}</h1>
-</div>
+<h1 class="h4 fw-semibold mb-4 page-title">{% if rule.id %}<i class="bi bi-pencil-fill page-title-icon"></i>Edit Rule{% else %}<i class="bi bi-plus-lg page-title-icon"></i>New Rule{% endif %}</h1>
 
 {% if error %}
 <div class="alert alert-danger py-2 px-3 small mb-4">{{ error }}</div>
