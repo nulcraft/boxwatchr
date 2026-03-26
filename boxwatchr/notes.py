@@ -4,10 +4,6 @@ def action_sentence(action, dry_run):
     if dry_run:
         if t == "move":
             return "Would have moved to %s." % dest
-        if t == "delete":
-            return "Would have moved to trash."
-        if t == "spam":
-            return "Would have moved to spam."
         if t == "mark_read":
             return "Would have marked as read."
         if t == "mark_unread":
@@ -23,10 +19,6 @@ def action_sentence(action, dry_run):
     else:
         if t == "move":
             return "Moved to %s." % dest
-        if t == "delete":
-            return "Moved to trash."
-        if t == "spam":
-            return "Moved to spam."
         if t == "mark_read":
             return "Marked as read."
         if t == "mark_unread":
@@ -46,10 +38,6 @@ def failed_action_sentence(action):
     dest = action.get("destination", "")
     if t == "move":
         return "Failed to move to %s." % dest
-    if t == "delete":
-        return "Failed to move to trash."
-    if t == "spam":
-        return "Failed to move to spam."
     if t == "mark_read":
         return "Failed to mark as read."
     if t == "mark_unread":

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Removed dead `delete` and `spam` action type branches from `notes.py`. (#50)
+
 ## [1.0.14] - 2026-03-26
 
 ### Fixed
