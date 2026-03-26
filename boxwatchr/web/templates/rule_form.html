@@ -42,12 +42,12 @@
             <div class="mb-3">
                 <p class="text-secondary small mb-1">For an address like <code>user@mail.example.com</code>:</p>
                 <ul class="text-secondary small mb-0 ps-3">
-                    <li><strong>Full address</strong> — the entire address: <code>user@mail.example.com</code></li>
-                    <li><strong>Local part</strong> — everything before the @: <code>user</code></li>
-                    <li><strong>Full domain</strong> — everything after the @: <code>mail.example.com</code></li>
-                    <li><strong>Domain name</strong> — subdomain + domain, no TLD: <code>mail.example</code></li>
-                    <li><strong>Domain root</strong> — registered domain only, no subdomain or TLD: <code>example</code></li>
-                    <li><strong>TLD</strong> — top-level domain only: <code>com</code></li>
+                    <li><strong>Full address:</strong> the entire address (<code>user@mail.example.com</code>)</li>
+                    <li><strong>Username:</strong> everything before the @ (<code>user</code>)</li>
+                    <li><strong>Full domain:</strong> everything after the @ (<code>mail.example.com</code>)</li>
+                    <li><strong>Subdomain + domain:</strong> excludes the TLD (<code>mail.example</code>)</li>
+                    <li><strong>Domain (no subdomain):</strong> the domain only, no subdomain or TLD (<code>example</code>)</li>
+                    <li><strong>TLD:</strong> top-level domain only (<code>com</code>)</li>
                 </ul>
             </div>
 
@@ -57,20 +57,20 @@
                 <div class="condition-row d-flex gap-2 align-items-start mb-2 flex-wrap flex-sm-nowrap">
                     <select name="condition_field" class="form-select cond-field">
                         <optgroup label="Sender">
-                            <option value="sender" {% if c.field == "sender" %}selected{% endif %}>Sender — full address</option>
-                            <option value="sender_local" {% if c.field == "sender_local" %}selected{% endif %}>Sender — local part (before @)</option>
-                            <option value="sender_domain" {% if c.field == "sender_domain" %}selected{% endif %}>Sender — full domain</option>
-                            <option value="sender_domain_name" {% if c.field == "sender_domain_name" %}selected{% endif %}>Sender — domain name</option>
-                            <option value="sender_domain_root" {% if c.field == "sender_domain_root" %}selected{% endif %}>Sender — domain root</option>
-                            <option value="sender_domain_tld" {% if c.field == "sender_domain_tld" %}selected{% endif %}>Sender — TLD</option>
+                            <option value="sender" {% if c.field == "sender" %}selected{% endif %}>Full address</option>
+                            <option value="sender_local" {% if c.field == "sender_local" %}selected{% endif %}>Username</option>
+                            <option value="sender_domain" {% if c.field == "sender_domain" %}selected{% endif %}>Full domain</option>
+                            <option value="sender_domain_name" {% if c.field == "sender_domain_name" %}selected{% endif %}>Subdomain + domain</option>
+                            <option value="sender_domain_root" {% if c.field == "sender_domain_root" %}selected{% endif %}>Domain (no subdomain)</option>
+                            <option value="sender_domain_tld" {% if c.field == "sender_domain_tld" %}selected{% endif %}>TLD</option>
                         </optgroup>
                         <optgroup label="Recipient">
-                            <option value="recipient" {% if c.field == "recipient" %}selected{% endif %}>Recipient — full address</option>
-                            <option value="recipient_local" {% if c.field == "recipient_local" %}selected{% endif %}>Recipient — local part (before @)</option>
-                            <option value="recipient_domain" {% if c.field == "recipient_domain" %}selected{% endif %}>Recipient — full domain</option>
-                            <option value="recipient_domain_name" {% if c.field == "recipient_domain_name" %}selected{% endif %}>Recipient — domain name</option>
-                            <option value="recipient_domain_root" {% if c.field == "recipient_domain_root" %}selected{% endif %}>Recipient — domain root</option>
-                            <option value="recipient_domain_tld" {% if c.field == "recipient_domain_tld" %}selected{% endif %}>Recipient — TLD</option>
+                            <option value="recipient" {% if c.field == "recipient" %}selected{% endif %}>Full address</option>
+                            <option value="recipient_local" {% if c.field == "recipient_local" %}selected{% endif %}>Username</option>
+                            <option value="recipient_domain" {% if c.field == "recipient_domain" %}selected{% endif %}>Full domain</option>
+                            <option value="recipient_domain_name" {% if c.field == "recipient_domain_name" %}selected{% endif %}>Subdomain + domain</option>
+                            <option value="recipient_domain_root" {% if c.field == "recipient_domain_root" %}selected{% endif %}>Domain (no subdomain)</option>
+                            <option value="recipient_domain_tld" {% if c.field == "recipient_domain_tld" %}selected{% endif %}>TLD</option>
                         </optgroup>
                         <optgroup label="Message">
                             <option value="subject" {% if c.field == "subject" %}selected{% endif %}>Subject</option>
@@ -170,20 +170,20 @@
     <div class="condition-row d-flex gap-2 align-items-start mb-2 flex-wrap flex-sm-nowrap">
         <select name="condition_field" class="form-select cond-field">
             <optgroup label="Sender">
-                <option value="sender">Sender — full address</option>
-                <option value="sender_local">Sender — local part (before @)</option>
-                <option value="sender_domain">Sender — full domain</option>
-                <option value="sender_domain_name">Sender — domain name</option>
-                <option value="sender_domain_root">Sender — domain root</option>
-                <option value="sender_domain_tld">Sender — TLD</option>
+                <option value="sender">Full address</option>
+                <option value="sender_local">Username</option>
+                <option value="sender_domain">Full domain</option>
+                <option value="sender_domain_name">Subdomain + domain</option>
+                <option value="sender_domain_root">Domain (no subdomain)</option>
+                <option value="sender_domain_tld">TLD</option>
             </optgroup>
             <optgroup label="Recipient">
-                <option value="recipient">Recipient — full address</option>
-                <option value="recipient_local">Recipient — local part (before @)</option>
-                <option value="recipient_domain">Recipient — full domain</option>
-                <option value="recipient_domain_name">Recipient — domain name</option>
-                <option value="recipient_domain_root">Recipient — domain root</option>
-                <option value="recipient_domain_tld">Recipient — TLD</option>
+                <option value="recipient">Full address</option>
+                <option value="recipient_local">Username</option>
+                <option value="recipient_domain">Full domain</option>
+                <option value="recipient_domain_name">Subdomain + domain</option>
+                <option value="recipient_domain_root">Domain (no subdomain)</option>
+                <option value="recipient_domain_tld">TLD</option>
             </optgroup>
             <optgroup label="Message">
                 <option value="subject">Subject</option>
