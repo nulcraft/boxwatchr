@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Redesigned update toast: header now shows "Update X.Y.Z Available", body renders GitHub release notes as markdown via marked.js with a scrollable 25vh container, changelog link removed, close button shrunk. (#38)
+
 ## [1.0.9] - 2026-03-26
 
 ### Added
