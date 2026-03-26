@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Renamed action dropdown options "Flag message" and "Remove flag" to "Mark as flagged" and "Mark as unflagged" for consistency with "Mark as read" / "Mark as unread".
+
 ## [1.0.15] - 2026-03-26
 
 ### Fixed

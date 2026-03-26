@@ -124,8 +124,8 @@
                         <option value="move" {% if a.type == "move" %}selected{% endif %}>Move to folder</option>
                         <option value="mark_read" {% if a.type == "mark_read" %}selected{% endif %}>Mark as read</option>
                         <option value="mark_unread" {% if a.type == "mark_unread" %}selected{% endif %}>Mark as unread</option>
-                        <option value="flag" {% if a.type == "flag" %}selected{% endif %}>Flag message</option>
-                        <option value="unflag" {% if a.type == "unflag" %}selected{% endif %}>Remove flag</option>
+                        <option value="flag" {% if a.type == "flag" %}selected{% endif %}>Mark as flagged</option>
+                        <option value="unflag" {% if a.type == "unflag" %}selected{% endif %}>Mark as unflagged</option>
                         <option value="learn_spam" {% if a.type == "learn_spam" %}selected{% endif %}>Submit to rspamd as spam</option>
                         <option value="learn_ham" {% if a.type == "learn_ham" %}selected{% endif %}>Submit to rspamd as ham</option>
                     </select>
@@ -215,8 +215,8 @@
             <option value="move">Move to folder</option>
             <option value="mark_read">Mark as read</option>
             <option value="mark_unread">Mark as unread</option>
-            <option value="flag">Flag message</option>
-            <option value="unflag">Remove flag</option>
+            <option value="flag">Mark as flagged</option>
+            <option value="unflag">Mark as unflagged</option>
             <option value="learn_spam">Submit to rspamd as spam</option>
             <option value="learn_ham">Submit to rspamd as ham</option>
         </select>

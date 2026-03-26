@@ -31,8 +31,8 @@ _ACTION_LABELS = {
     "move": "Move to folder",
     "mark_read": "Mark as read",
     "mark_unread": "Mark as unread",
-    "flag": "Flag message",
-    "unflag": "Remove flag",
+    "flag": "Mark as flagged",
+    "unflag": "Mark as unflagged",
     "learn_spam": "Submit to rspamd as spam",
     "learn_ham": "Submit to rspamd as ham",
 }
