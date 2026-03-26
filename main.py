@@ -68,10 +68,10 @@ def _decode(value):
 
 def _compute_content_hash(sender, subject, date_received, recipients):
     parts = "|".join([
-        sender or "",
+        (sender or "").lower(),
         subject or "",
         date_received or "",
-        ",".join(sorted(recipients or [])),
+        ",".join(sorted(r.lower() for r in (recipients or []))),
     ])
     return hashlib.sha256(parts.encode("utf-8")).hexdigest()
 

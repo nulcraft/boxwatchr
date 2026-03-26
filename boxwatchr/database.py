@@ -1,3 +1,4 @@
+import hashlib
 import sqlite3
 import os
 import signal
@@ -59,11 +60,27 @@ def _get_version(conn):
 def _set_version(conn, version):
     conn.execute(f"PRAGMA user_version = {version}")
 
+def _compute_content_hash(sender, subject, date_received, recipients):
+    parts = "|".join([
+        (sender or "").lower(),
+        subject or "",
+        date_received or "",
+        ",".join(sorted(r.lower() for r in (recipients or []))),
+    ])
+    return hashlib.sha256(parts.encode("utf-8")).hexdigest()
+
 def _migrate_v1_to_v2(conn):
     logger.info("Migrating database schema from v1 to v2 (adding content_hash)")
     conn.execute("ALTER TABLE emails ADD COLUMN content_hash TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_emails_content_hash ON emails (content_hash)")
-    logger.info("Migration v1 to v2 complete")
+    rows = conn.execute(
+        "SELECT id, sender, subject, date_received, recipients FROM emails WHERE content_hash IS NULL"
+    ).fetchall()
+    for row in rows:
+        recipient_list = [r for r in (row["recipients"] or "").split(",") if r]
+        h = _compute_content_hash(row["sender"], row["subject"], row["date_received"], recipient_list)
+        conn.execute("UPDATE emails SET content_hash = ? WHERE id = ?", (h, row["id"]))
+    logger.info("Migration v1 to v2 complete: backfilled content_hash for %s existing record(s)", len(rows))
 
 def _create_schema(conn):
     logger.info("Creating database schema (v2)")
