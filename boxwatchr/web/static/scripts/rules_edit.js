@@ -64,12 +64,6 @@ function addCondition() {
     if (notice) notice.classList.add("d-none");
 }
 
-function prepareSubmit() {
-    document.querySelectorAll(".action-dest").forEach(function(el) {
-        el.disabled = false;
-    });
-}
-
 function addAction() {
     var template = document.getElementById("action-template");
     var clone = template.content.cloneNode(true);
@@ -81,11 +75,6 @@ function addAction() {
 }
 
 document.addEventListener("DOMContentLoaded", function() {
-    var form = document.querySelector("form[method='post']");
-    if (form) {
-        form.addEventListener("submit", prepareSubmit);
-    }
-
     var condContainer = document.getElementById("conditions-container");
     if (condContainer) {
         condContainer.addEventListener("change", function(e) {

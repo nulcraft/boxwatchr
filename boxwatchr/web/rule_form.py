@@ -23,12 +23,14 @@ def _parse_rule_form(form):
             conditions.append({"field": field, "operator": operator, "value": value})
 
     actions = []
-    for action_type, destination in zip(action_types, action_destinations):
+    dest_idx = 0
+    for action_type in action_types:
         if not action_type:
             continue
         action = {"type": action_type}
         if action_type == "move":
-            action["destination"] = destination
+            action["destination"] = action_destinations[dest_idx] if dest_idx < len(action_destinations) else ""
+            dest_idx += 1
         actions.append(action)
 
     return {
