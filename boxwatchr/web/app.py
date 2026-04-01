@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from flask import Flask, abort, redirect, request, session, url_for
 from boxwatchr import config
 from boxwatchr.crypto import encrypt_password
-from boxwatchr.database import get_config, set_config, bulk_set_config, upsert_account, get_first_account
+from boxwatchr.database import get_config, set_config, bulk_set_config, upsert_account, get_first_account, get_all_accounts, get_account
 from boxwatchr.logger import get_logger
 
 logger = get_logger("boxwatchr.web")
@@ -189,9 +189,27 @@ def _save_app_config(form):
 app.jinja_env.globals["csrf_token"] = _csrf_token
 app.jinja_env.filters["localtime"] = _utc_to_local
 
+def get_selected_account_id():
+    return session.get("selected_account_id") or ""
+
+def get_selected_account_name():
+    acct_id = get_selected_account_id()
+    if not acct_id:
+        return "All Accounts"
+    row = get_account(acct_id)
+    return row["name"] if row else "All Accounts"
+
 @app.context_processor
 def _inject_globals():
-    return {"dry_run": config.DRYRUN, "app_version": APP_VERSION}
+    accounts = get_all_accounts() if config.SETUP_COMPLETE else []
+    selected_id = get_selected_account_id()
+    return {
+        "dry_run": config.DRYRUN,
+        "app_version": APP_VERSION,
+        "all_accounts": [{"id": a["id"], "name": a["name"], "enabled": a["enabled"]} for a in accounts],
+        "selected_account_id": selected_id,
+        "selected_account_name": get_selected_account_name(),
+    }
 
 @app.route("/")
 def index():
@@ -225,6 +243,8 @@ def start_dashboard():
     import boxwatchr.web.rule_form
     import boxwatchr.web.training
     import boxwatchr.web.version
+    import boxwatchr.web.accounts
+    import boxwatchr.web.presets
     port = int(os.environ.get("WEB_PORT", 8143))
     t = threading.Thread(target=_run_server, daemon=True, name="web-server")
     t.start()

@@ -30,6 +30,12 @@
                     <td class="detail-label">Date Received</td>
                     <td>{{ email.date_received or "—" }}</td>
                 </tr>
+                {% if email.account_name %}
+                <tr>
+                    <td class="detail-label">Account</td>
+                    <td>{{ email.account_name }}</td>
+                </tr>
+                {% endif %}
                 <tr>
                     <td class="detail-label">Folder</td>
                     <td>{{ email.folder }}</td>

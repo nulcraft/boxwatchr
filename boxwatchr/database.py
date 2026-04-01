@@ -17,7 +17,7 @@ logger = get_logger("boxwatchr.database")
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "boxwatchr.db")
 
-CURRENT_VERSION = 2
+CURRENT_VERSION = 3
 
 _log_queue = collections.deque()
 _email_queue = collections.deque()
@@ -82,14 +82,35 @@ def _migrate_v1_to_v2(conn):
         conn.execute("UPDATE emails SET content_hash = ? WHERE id = ?", (h, row["id"]))
     logger.info("Migration v1 to v2 complete: backfilled content_hash for %s existing record(s)", len(rows))
 
-def _migrate_v3_to_v2(conn):
-    logger.info("Migrating database schema from v3 to v2 (removing 1.1.0 additions)")
-    conn.execute("ALTER TABLE rules DROP COLUMN condition_groups")
-    conn.execute("ALTER TABLE rules DROP COLUMN enabled")
-    conn.execute("ALTER TABLE emails DROP COLUMN rspamd_symbols")
-    conn.execute("ALTER TABLE emails DROP COLUMN body_text")
-    conn.execute("ALTER TABLE emails DROP COLUMN retry_after")
-    logger.info("Migration v3 to v2 complete")
+def _migrate_v2_to_v3(conn):
+    logger.info("Migrating database schema from v2 to v3 (multi-account + presets)")
+    conn.execute("ALTER TABLE accounts ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+    conn.execute("ALTER TABLE rules ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+    conn.execute("ALTER TABLE rules ADD COLUMN preset_id TEXT")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS presets (
+            id           TEXT PRIMARY KEY,
+            name         TEXT NOT NULL,
+            description  TEXT NOT NULL DEFAULT '',
+            category     TEXT NOT NULL DEFAULT 'spam',
+            patterns     TEXT NOT NULL DEFAULT '[]',
+            default_actions TEXT NOT NULL DEFAULT '[]',
+            built_in     INTEGER NOT NULL DEFAULT 0,
+            version      INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS account_presets (
+            account_id   TEXT NOT NULL REFERENCES accounts(id),
+            preset_id    TEXT NOT NULL REFERENCES presets(id),
+            enabled      INTEGER NOT NULL DEFAULT 1,
+            actions_override TEXT,
+            PRIMARY KEY (account_id, preset_id)
+        )
+    """)
+    from boxwatchr.presets import seed_presets
+    seed_presets(conn)
+    logger.info("Migration v2 to v3 complete")
 
 def _create_schema(conn):
     logger.info("Creating database schema (v2)")
@@ -105,7 +126,8 @@ def _create_schema(conn):
             folder       TEXT NOT NULL DEFAULT 'INBOX',
             poll_interval INTEGER NOT NULL DEFAULT 60,
             tls_mode     TEXT NOT NULL DEFAULT 'ssl',
-            created_at   TEXT NOT NULL
+            created_at   TEXT NOT NULL,
+            enabled      INTEGER NOT NULL DEFAULT 1
         )
     """)
     logger.debug("Accounts table created")
@@ -119,7 +141,9 @@ def _create_schema(conn):
             match               TEXT NOT NULL DEFAULT 'all',
             conditions          TEXT NOT NULL DEFAULT '[]',
             actions             TEXT NOT NULL DEFAULT '[]',
-            continue_processing INTEGER NOT NULL DEFAULT 0
+            continue_processing INTEGER NOT NULL DEFAULT 0,
+            enabled             INTEGER NOT NULL DEFAULT 1,
+            preset_id           TEXT
         )
     """)
     conn.execute("CREATE INDEX idx_rules_account_position ON rules (account_id, position)")
@@ -176,7 +200,35 @@ def _create_schema(conn):
     """)
     logger.debug("Config table created")
 
-    logger.info("Database schema v2 created")
+    conn.execute("""
+        CREATE TABLE presets (
+            id           TEXT PRIMARY KEY,
+            name         TEXT NOT NULL,
+            description  TEXT NOT NULL DEFAULT '',
+            category     TEXT NOT NULL DEFAULT 'spam',
+            patterns     TEXT NOT NULL DEFAULT '[]',
+            default_actions TEXT NOT NULL DEFAULT '[]',
+            built_in     INTEGER NOT NULL DEFAULT 0,
+            version      INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    logger.debug("Presets table created")
+
+    conn.execute("""
+        CREATE TABLE account_presets (
+            account_id   TEXT NOT NULL REFERENCES accounts(id),
+            preset_id    TEXT NOT NULL REFERENCES presets(id),
+            enabled      INTEGER NOT NULL DEFAULT 1,
+            actions_override TEXT,
+            PRIMARY KEY (account_id, preset_id)
+        )
+    """)
+    logger.debug("Account presets table created")
+
+    from boxwatchr.presets import seed_presets
+    seed_presets(conn)
+
+    logger.info("Database schema v3 created")
 
 def initialize():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -189,12 +241,6 @@ def initialize():
                 return
 
             if current_version > CURRENT_VERSION:
-                if current_version == 3 and CURRENT_VERSION == 2:
-                    _migrate_v3_to_v2(conn)
-                    _set_version(conn, 2)
-                    conn.commit()
-                    logger.info("Database downgraded from version 3 to version 2")
-                    return
                 logger.error(
                     "Database version %s is newer than the application expects (%s). "
                     "Please update boxwatchr.",
@@ -211,9 +257,13 @@ def initialize():
 
             if current_version < 2:
                 _migrate_v1_to_v2(conn)
-                _set_version(conn, 2)
-                conn.commit()
-                logger.info("Database migrated to version 2")
+
+            if current_version < 3:
+                _migrate_v2_to_v3(conn)
+
+            _set_version(conn, CURRENT_VERSION)
+            conn.commit()
+            logger.info("Database migrated to version %s", CURRENT_VERSION)
 
     except sqlite3.Error as e:
         logger.error("Failed to initialize database: %s", e)
@@ -305,7 +355,7 @@ def get_rule(rule_id):
         logger.error("Failed to fetch rule %s: %s", rule_id, e)
         return None
 
-def insert_rule(account_id, name, match, conditions_json, actions_json, continue_processing=0):
+def insert_rule(account_id, name, match, conditions_json, actions_json, continue_processing=0, enabled=1, preset_id=None):
     rule_id = str(uuid.uuid4())
     try:
         with _db() as conn:
@@ -315,22 +365,22 @@ def insert_rule(account_id, name, match, conditions_json, actions_json, continue
             ).fetchone()
             position = row["next_pos"]
             conn.execute("""
-                INSERT INTO rules (id, account_id, position, name, match, conditions, actions, continue_processing)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (rule_id, account_id, position, name, match, conditions_json, actions_json, int(continue_processing)))
+                INSERT INTO rules (id, account_id, position, name, match, conditions, actions, continue_processing, enabled, preset_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (rule_id, account_id, position, name, match, conditions_json, actions_json, int(continue_processing), int(enabled), preset_id))
             conn.commit()
     except sqlite3.Error as e:
         logger.error("Failed to insert rule: %s", e)
         raise
     return rule_id
 
-def update_rule(rule_id, name, match, conditions_json, actions_json, continue_processing=0):
+def update_rule(rule_id, name, match, conditions_json, actions_json, continue_processing=0, enabled=1):
     try:
         with _db() as conn:
             conn.execute("""
-                UPDATE rules SET name = ?, match = ?, conditions = ?, actions = ?, continue_processing = ?
+                UPDATE rules SET name = ?, match = ?, conditions = ?, actions = ?, continue_processing = ?, enabled = ?
                 WHERE id = ?
-            """, (name, match, conditions_json, actions_json, int(continue_processing), rule_id))
+            """, (name, match, conditions_json, actions_json, int(continue_processing), int(enabled), rule_id))
             conn.commit()
     except sqlite3.Error as e:
         logger.error("Failed to update rule %s: %s", rule_id, e)
@@ -666,7 +716,7 @@ def verify():
             if version != CURRENT_VERSION:
                 raise RuntimeError(f"Database version mismatch: expected {CURRENT_VERSION}, got {version}")
 
-            expected_tables = {"accounts", "rules", "emails", "logs", "config"}
+            expected_tables = {"accounts", "rules", "emails", "logs", "config", "presets", "account_presets"}
             rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             found_tables = {row["name"] for row in rows}
             missing = expected_tables - found_tables
@@ -718,4 +768,161 @@ def get_unprocessed_emails(account_id=None):
 
     except sqlite3.Error as e:
         logger.error("Failed to fetch unprocessed email records: %s", e)
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Multi-account helpers
+# ---------------------------------------------------------------------------
+
+def get_all_accounts():
+    try:
+        with _db() as conn:
+            return conn.execute("SELECT * FROM accounts ORDER BY created_at ASC").fetchall()
+    except sqlite3.Error as e:
+        logger.error("Failed to fetch accounts: %s", e)
+        return []
+
+def get_enabled_accounts():
+    try:
+        with _db() as conn:
+            return conn.execute(
+                "SELECT * FROM accounts WHERE enabled = 1 ORDER BY created_at ASC"
+            ).fetchall()
+    except sqlite3.Error as e:
+        logger.error("Failed to fetch enabled accounts: %s", e)
+        return []
+
+def get_account(account_id):
+    try:
+        with _db() as conn:
+            return conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+    except sqlite3.Error as e:
+        logger.error("Failed to fetch account %s: %s", account_id, e)
+        return None
+
+def update_account_enabled(account_id, enabled):
+    try:
+        with _db() as conn:
+            conn.execute("UPDATE accounts SET enabled = ? WHERE id = ?", (int(enabled), account_id))
+            conn.commit()
+    except sqlite3.Error as e:
+        logger.error("Failed to update account enabled state %s: %s", account_id, e)
+        raise
+
+def delete_account(account_id):
+    try:
+        with _db() as conn:
+            conn.execute("DELETE FROM account_presets WHERE account_id = ?", (account_id,))
+            conn.execute("DELETE FROM rules WHERE account_id = ?", (account_id,))
+            conn.execute("UPDATE logs SET email_id = NULL WHERE email_id IN (SELECT id FROM emails WHERE account_id = ?)", (account_id,))
+            conn.execute("DELETE FROM emails WHERE account_id = ?", (account_id,))
+            conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+            conn.commit()
+    except sqlite3.Error as e:
+        logger.error("Failed to delete account %s: %s", account_id, e)
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Preset helpers
+# ---------------------------------------------------------------------------
+
+def get_presets():
+    try:
+        with _db() as conn:
+            return conn.execute("SELECT * FROM presets ORDER BY category, name").fetchall()
+    except sqlite3.Error as e:
+        logger.error("Failed to fetch presets: %s", e)
+        return []
+
+def get_preset(preset_id):
+    try:
+        with _db() as conn:
+            return conn.execute("SELECT * FROM presets WHERE id = ?", (preset_id,)).fetchone()
+    except sqlite3.Error as e:
+        logger.error("Failed to fetch preset %s: %s", preset_id, e)
+        return None
+
+def upsert_preset(preset_id, name, description, category, patterns_json, default_actions_json, built_in=0, version=1):
+    try:
+        with _db() as conn:
+            conn.execute("""
+                INSERT INTO presets (id, name, description, category, patterns, default_actions, built_in, version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    description = excluded.description,
+                    category = excluded.category,
+                    patterns = excluded.patterns,
+                    default_actions = excluded.default_actions,
+                    built_in = excluded.built_in,
+                    version = excluded.version
+            """, (preset_id, name, description, category, patterns_json, default_actions_json, int(built_in), version))
+            conn.commit()
+    except sqlite3.Error as e:
+        logger.error("Failed to upsert preset %s: %s", preset_id, e)
+        raise
+
+def delete_preset(preset_id):
+    try:
+        with _db() as conn:
+            conn.execute("DELETE FROM rules WHERE preset_id = ?", (preset_id,))
+            conn.execute("DELETE FROM account_presets WHERE preset_id = ?", (preset_id,))
+            conn.execute("DELETE FROM presets WHERE id = ?", (preset_id,))
+            conn.commit()
+    except sqlite3.Error as e:
+        logger.error("Failed to delete preset %s: %s", preset_id, e)
+        raise
+
+def get_account_presets(account_id):
+    try:
+        with _db() as conn:
+            return conn.execute("""
+                SELECT p.*, ap.enabled AS ap_enabled, ap.actions_override
+                FROM presets p
+                LEFT JOIN account_presets ap ON ap.preset_id = p.id AND ap.account_id = ?
+                ORDER BY p.category, p.name
+            """, (account_id,)).fetchall()
+    except sqlite3.Error as e:
+        logger.error("Failed to fetch account presets for %s: %s", account_id, e)
+        return []
+
+def set_account_preset(account_id, preset_id, enabled, actions_override=None):
+    try:
+        with _db() as conn:
+            conn.execute("""
+                INSERT INTO account_presets (account_id, preset_id, enabled, actions_override)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(account_id, preset_id) DO UPDATE SET
+                    enabled = excluded.enabled,
+                    actions_override = excluded.actions_override
+            """, (account_id, preset_id, int(enabled), actions_override))
+            conn.commit()
+    except sqlite3.Error as e:
+        logger.error("Failed to set account preset %s/%s: %s", account_id, preset_id, e)
+        raise
+
+def get_preset_rules_for_account(account_id):
+    try:
+        with _db() as conn:
+            return conn.execute(
+                "SELECT * FROM rules WHERE account_id = ? AND preset_id IS NOT NULL ORDER BY position ASC",
+                (account_id,)
+            ).fetchall()
+    except sqlite3.Error as e:
+        logger.error("Failed to fetch preset rules for account %s: %s", account_id, e)
+        return []
+
+def delete_preset_rules_for_account(account_id, preset_id):
+    try:
+        with _db() as conn:
+            conn.execute(
+                "DELETE FROM rules WHERE account_id = ? AND preset_id = ?",
+                (account_id, preset_id)
+            )
+            _renumber_rule_positions(conn, account_id)
+            conn.commit()
+    except sqlite3.Error as e:
+        logger.error("Failed to delete preset rules for account %s preset %s: %s", account_id, preset_id, e)
         raise

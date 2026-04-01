@@ -6,8 +6,8 @@ from boxwatchr import config, imap, spam
 from boxwatchr.database import db_connection, get_rule, insert_rule, update_rule, enqueue_email_update
 from boxwatchr.notes import action_sentence
 from boxwatchr.rules import validate_rule, check_rule, load_rules, TERMINAL_ACTIONS
-from boxwatchr.web.app import app, _require_auth, _require_csrf, _check_csrf, logger
-from boxwatchr.web.rules import _FIELD_LABELS, _ACTION_LABELS
+from boxwatchr.web.app import app, _require_auth, _require_csrf, _check_csrf, get_selected_account_id, logger
+from boxwatchr.web.rules import _FIELD_LABELS, _ACTION_LABELS, _get_rules_account_id
 
 
 _RULE_TEMPLATES = [
@@ -70,14 +70,16 @@ def _parse_rule_form(form):
         "match": form.get("match", "all"),
         "conditions": conditions,
         "actions": actions,
+        "continue_processing": form.get("continue_processing") == "1",
     }
 
 
 @app.route("/rules/new", methods=["GET", "POST"])
 @_require_auth
 def rule_new():
+    account_id = _get_rules_account_id()
     error = None
-    rule = {"name": "", "match": "all", "conditions": [], "actions": []}
+    rule = {"name": "", "match": "all", "conditions": [], "actions": [], "continue_processing": 0}
     folders = imap.get_folder_list()
 
     if request.method == "GET":
@@ -97,13 +99,14 @@ def rule_new():
         else:
             try:
                 insert_rule(
-                    account_id=config.ACCOUNT_ID,
+                    account_id=account_id,
                     name=validated["name"],
                     match=validated["match"],
                     conditions_json=json.dumps(validated["conditions"]),
                     actions_json=json.dumps(validated["actions"]),
+                    continue_processing=1 if validated.get("continue_processing") else 0,
                 )
-                load_rules()
+                load_rules(account_id)
                 logger.info("User created rule '%s'", validated["name"])
                 return redirect(url_for("rules_list"))
             except Exception as e:
@@ -124,8 +127,9 @@ def rule_new():
 @app.route("/rules/<rule_id>/edit", methods=["GET", "POST"])
 @_require_auth
 def rule_edit(rule_id):
+    account_id = _get_rules_account_id()
     row = get_rule(rule_id)
-    if row is None or row["account_id"] != config.ACCOUNT_ID:
+    if row is None or row["account_id"] != account_id:
         abort(404)
 
     error = None
@@ -135,6 +139,7 @@ def rule_edit(rule_id):
         "match": row["match"],
         "conditions": json.loads(row["conditions"] or "[]"),
         "actions": json.loads(row["actions"] or "[]"),
+        "continue_processing": row["continue_processing"],
     }
     folders = imap.get_folder_list()
 
@@ -153,8 +158,9 @@ def rule_edit(rule_id):
                     match=validated["match"],
                     conditions_json=json.dumps(validated["conditions"]),
                     actions_json=json.dumps(validated["actions"]),
+                    continue_processing=1 if validated.get("continue_processing") else 0,
                 )
-                load_rules()
+                load_rules(account_id)
                 logger.info("User updated rule '%s'", validated["name"])
                 return redirect(url_for("rules_list"))
             except Exception as e:
@@ -175,8 +181,9 @@ def rule_edit(rule_id):
 @_require_auth
 @_require_csrf
 def rule_run(rule_id):
+    account_id = _get_rules_account_id()
     row = get_rule(rule_id)
-    if row is None or row["account_id"] != config.ACCOUNT_ID:
+    if row is None or row["account_id"] != account_id:
         abort(404)
 
     rule_dict = {
@@ -195,18 +202,23 @@ def rule_run(rule_id):
     actioned = 0
     would_have_actioned = 0
 
+    # Determine the folder from the account
+    from boxwatchr.database import get_account as _get_acct
+    acct_row = _get_acct(account_id)
+    run_folder = acct_row["folder"] if acct_row else config.IMAP_FOLDER
+
     try:
         with db_connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM emails WHERE folder = ? AND account_id = ?",
-                (config.IMAP_FOLDER, config.ACCOUNT_ID)
+                (run_folder, account_id)
             ).fetchall()
     except sqlite3.Error as e:
         logger.error("Rule run: database error for rule '%s': %s", rule["name"], e)
         return redirect(url_for("rules_list"))
 
     if not rows:
-        logger.debug("Rule run: no emails in database for folder %s", config.IMAP_FOLDER)
+        logger.debug("Rule run: no emails in database for folder %s", run_folder)
         flash("Rule '%s' ran: no emails in database." % rule["name"], "success")
         return redirect(url_for("rules_list"))
 
@@ -218,12 +230,26 @@ def rule_run(rule_id):
 
     needs_rfc822 = any(a["type"] in {"learn_spam", "learn_ham"} for a in resolved_actions)
 
+    # Build an account dict for the IMAP connection
+    if acct_row:
+        from boxwatchr.crypto import decrypt_password
+        run_account = {
+            "host": acct_row["host"],
+            "port": int(acct_row["port"]),
+            "username": acct_row["username"],
+            "password": decrypt_password(acct_row["password"]),
+            "tls_mode": acct_row["tls_mode"],
+            "folder": acct_row["folder"],
+        }
+    else:
+        run_account = None
+
     try:
-        client = imap.connect()
+        client = imap.connect(account=run_account)
         try:
-            imap.select_folder(client)
+            imap.select_folder(client, run_folder)
             current_uids = set(client.search(["ALL"]))
-            logger.debug("Rule run: %s UID(s) currently in %s", len(current_uids), config.IMAP_FOLDER)
+            logger.debug("Rule run: %s UID(s) currently in %s", len(current_uids), run_folder)
             processed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
             for email_row in rows:

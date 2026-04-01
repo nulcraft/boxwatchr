@@ -63,6 +63,26 @@ def load():
 def reload():
     load()
 
+def get_all_account_dicts():
+    """Return all enabled accounts as plain dicts with decrypted passwords."""
+    from boxwatchr.database import get_enabled_accounts
+    from boxwatchr.crypto import decrypt_password
+    accounts = []
+    for row in get_enabled_accounts():
+        accounts.append({
+            "id": row["id"],
+            "name": row["name"],
+            "host": row["host"],
+            "port": int(row["port"]),
+            "username": row["username"],
+            "password": decrypt_password(row["password"]),
+            "folder": row["folder"],
+            "poll_interval": int(row["poll_interval"]),
+            "tls_mode": row["tls_mode"],
+            "enabled": row["enabled"],
+        })
+    return accounts
+
 def _update_log_level():
     from boxwatchr.logger import DatabaseHandler
     for name in logging.Logger.manager.loggerDict:

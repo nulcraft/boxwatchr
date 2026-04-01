@@ -16,7 +16,19 @@ _reconnect_event = threading.Event()
 _folder_list_cache = {"folders": [], "expires": 0.0, "fetching": False}
 _folder_list_lock = threading.Lock()
 
-def get_folder_list():
+def get_folder_list(account=None):
+    if account:
+        try:
+            client = connect(account=account)
+            try:
+                folders = sorted(name for flags, delimiter, name in client.list_folders())
+            finally:
+                client.logout()
+            return folders
+        except Exception as e:
+            logger.warning("Could not fetch IMAP folder list: %s", e)
+            return []
+
     with _folder_list_lock:
         now = time.monotonic()
         if _folder_list_cache["expires"] > now:
@@ -52,17 +64,29 @@ def request_stop():
 def request_reconnect():
     _reconnect_event.set()
 
-def connect(tls_mode=None):
-    mode = tls_mode if tls_mode is not None else config.IMAP_TLS_MODE
-    logger.debug("Connecting to IMAP server %s:%s (tls_mode=%s)", config.IMAP_HOST, config.IMAP_PORT, mode)
+def connect(tls_mode=None, account=None):
+    if account:
+        host = account["host"]
+        port = account["port"]
+        username = account["username"]
+        password = account["password"]
+        mode = tls_mode if tls_mode is not None else account.get("tls_mode", "ssl")
+    else:
+        host = config.IMAP_HOST
+        port = config.IMAP_PORT
+        username = config.IMAP_USERNAME
+        password = config.IMAP_PASSWORD
+        mode = tls_mode if tls_mode is not None else config.IMAP_TLS_MODE
+
+    logger.debug("Connecting to IMAP server %s:%s (tls_mode=%s)", host, port, mode)
     try:
         use_ssl = mode == "ssl"
-        client = IMAPClient(config.IMAP_HOST, port=config.IMAP_PORT, ssl=use_ssl, timeout=60)
+        client = IMAPClient(host, port=port, ssl=use_ssl, timeout=60)
         if mode == "starttls":
             client.starttls()
-        logger.debug("TCP connection established to %s:%s", config.IMAP_HOST, config.IMAP_PORT)
-        client.login(config.IMAP_USERNAME, config.IMAP_PASSWORD)
-        logger.debug("Logged in as %s", config.IMAP_USERNAME)
+        logger.debug("TCP connection established to %s:%s", host, port)
+        client.login(username, password)
+        logger.debug("Logged in as %s", username)
         capabilities = client.capabilities()
         logger.debug(
             "Server capabilities: %s",
@@ -70,19 +94,20 @@ def connect(tls_mode=None):
         )
         return client
     except LoginError as e:
-        logger.error("Authentication failed for %s: %s", config.IMAP_USERNAME, e)
+        logger.error("Authentication failed for %s: %s", username, e)
         raise FatalImapError("Authentication failed") from e
     except Exception as e:
         logger.error("Failed to connect to IMAP server: %s", e)
         raise
 
-def select_folder(client):
-    logger.debug("Selecting folder: %s", config.IMAP_FOLDER)
+def select_folder(client, folder=None):
+    folder = folder or config.IMAP_FOLDER
+    logger.debug("Selecting folder: %s", folder)
     try:
-        info = client.select_folder(config.IMAP_FOLDER)
-        logger.debug("Folder %s selected: %s message(s)", config.IMAP_FOLDER, info.get(b"EXISTS", "?"))
+        info = client.select_folder(folder)
+        logger.debug("Folder %s selected: %s message(s)", folder, info.get(b"EXISTS", "?"))
     except Exception as e:
-        logger.error("Failed to select folder %s: %s", config.IMAP_FOLDER, e)
+        logger.error("Failed to select folder %s: %s", folder, e)
         raise
 
 def fetch_message(client, uid):
@@ -110,38 +135,46 @@ def list_folder_names(client):
 
 
 def get_existing_uids(client):
-    logger.debug("Fetching existing UIDs in %s", config.IMAP_FOLDER)
+    logger.debug("Fetching existing UIDs")
     try:
         uids = client.search(["ALL"])
-        logger.debug("Found %s existing messages in %s", len(uids), config.IMAP_FOLDER)
+        logger.debug("Found %s existing messages", len(uids))
         return set(uids)
     except Exception as e:
         logger.error("Failed to fetch existing UIDs: %s", e)
         raise
 
-def watch(callback, rescan_callback=None):
-    _reconnect_event.clear()
-    client = connect()
-    select_folder(client)
+def watch(callback, account=None, stop_event=None, reconnect_event=None, rescan_callback=None):
+    _stop = stop_event or _stop_event
+    _reconnect = reconnect_event or _reconnect_event
+    _reconnect.clear()
+
+    folder = account["folder"] if account else config.IMAP_FOLDER
+
+    client = connect(account=account)
+    select_folder(client, folder)
     known_uids = get_existing_uids(client)
-    logger.info("Watching %s for new mail (%s existing messages)", config.IMAP_FOLDER, len(known_uids))
+    logger.info("Watching %s for new mail (%s existing messages)", folder, len(known_uids))
 
     try:
         if client.has_capability("IDLE"):
             logger.info("IMAP IDLE is supported, using push notifications")
-            _watch_idle(client, known_uids, callback, rescan_callback=rescan_callback)
+            _watch_idle(client, known_uids, callback, stop_event=_stop, reconnect_event=_reconnect, rescan_callback=rescan_callback)
         else:
-            logger.warning("IMAP IDLE is not supported, falling back to polling every %s seconds", config.IMAP_POLL_INTERVAL)
-            _watch_poll(client, known_uids, callback)
+            poll_interval = account["poll_interval"] if account else config.IMAP_POLL_INTERVAL
+            logger.warning("IMAP IDLE is not supported, falling back to polling every %s seconds", poll_interval)
+            _watch_poll(client, known_uids, callback, poll_interval=poll_interval, stop_event=_stop, reconnect_event=_reconnect)
     finally:
         try:
             client.logout()
         except Exception:
             pass
 
-def _watch_idle(client, known_uids, callback, rescan_callback=None):
+def _watch_idle(client, known_uids, callback, stop_event=None, reconnect_event=None, rescan_callback=None):
+    _stop = stop_event or _stop_event
+    _reconnect = reconnect_event or _reconnect_event
     last_rescan = time.monotonic()
-    while not _stop_event.is_set() and not _reconnect_event.is_set():
+    while not _stop.is_set() and not _reconnect.is_set():
         idle_started = False
         try:
             logger.debug("Starting IDLE session (timeout=%ss)", IDLE_TIMEOUT)
@@ -152,7 +185,7 @@ def _watch_idle(client, known_uids, callback, rescan_callback=None):
             rescan_due = False
             deadline = time.monotonic() + IDLE_TIMEOUT
             while time.monotonic() < deadline:
-                if _stop_event.is_set() or _reconnect_event.is_set():
+                if _stop.is_set() or _reconnect.is_set():
                     break
                 if rescan_callback and time.monotonic() - last_rescan >= RESCAN_INTERVAL:
                     rescan_due = True
@@ -168,11 +201,11 @@ def _watch_idle(client, known_uids, callback, rescan_callback=None):
             if responses:
                 logger.debug("IDLE responses: %s", responses)
 
-            if _stop_event.is_set() or _reconnect_event.is_set():
+            if _stop.is_set() or _reconnect.is_set():
                 break
 
             if rescan_due:
-                logger.info("Running periodic rescan of %s", config.IMAP_FOLDER)
+                logger.info("Running periodic rescan")
                 rescan_callback(client)
                 last_rescan = time.monotonic()
                 continue
@@ -203,16 +236,19 @@ def _watch_idle(client, known_uids, callback, rescan_callback=None):
             logger.warning("IDLE connection interrupted: %s", e)
             raise
 
-def _watch_poll(client, known_uids, callback):
-    while not _stop_event.is_set() and not _reconnect_event.is_set():
+def _watch_poll(client, known_uids, callback, poll_interval=None, stop_event=None, reconnect_event=None):
+    _stop = stop_event or _stop_event
+    _reconnect = reconnect_event or _reconnect_event
+    interval = poll_interval if poll_interval is not None else config.IMAP_POLL_INTERVAL
+    while not _stop.is_set() and not _reconnect.is_set():
         try:
-            logger.debug("Polling: sleeping %s seconds", config.IMAP_POLL_INTERVAL)
-            time.sleep(config.IMAP_POLL_INTERVAL)
+            logger.debug("Polling: sleeping %s seconds", interval)
+            time.sleep(interval)
 
-            if _stop_event.is_set() or _reconnect_event.is_set():
+            if _stop.is_set() or _reconnect.is_set():
                 break
 
-            logger.debug("Polling for new messages in %s", config.IMAP_FOLDER)
+            logger.debug("Polling for new messages")
 
             current_uids = get_existing_uids(client)
             new_uids = current_uids - known_uids

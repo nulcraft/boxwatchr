@@ -1,0 +1,50 @@
+{% extends "app.html" %}
+{% block title %}boxwatchr / Edit Preset: {{ preset.name }}{% endblock %}
+
+{% block content %}
+<h1 class="h4 fw-semibold mb-4 page-title"><i class="bi bi-shield-fill page-title-icon"></i>Edit Preset</h1>
+
+{% if error %}
+<div class="alert alert-danger py-2 px-3 small mb-4">{{ error }}</div>
+{% endif %}
+
+<form method="post" action="/presets/{{ preset.id }}/edit">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-label">Name</label>
+                    <input type="text" name="name" class="form-control" value="{{ preset.name }}" required>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Description</label>
+                    <input type="text" name="description" class="form-control" value="{{ preset.description }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="card-subtitle">Patterns</h2>
+            <p class="small text-secondary mb-2">JSON array of condition objects. Each has <code>field</code>, <code>operator</code>, and <code>value</code>.</p>
+            <textarea name="patterns_json" class="form-control font-monospace small" rows="12">{{ patterns_json }}</textarea>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="card-subtitle">Default Actions</h2>
+            <p class="small text-secondary mb-2">JSON array of action objects. Each has <code>type</code> and optionally <code>destination</code>.</p>
+            <textarea name="actions_json" class="form-control font-monospace small" rows="6">{{ actions_json }}</textarea>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a href="/presets" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}

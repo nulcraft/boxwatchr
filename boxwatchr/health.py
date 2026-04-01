@@ -101,6 +101,54 @@ def _check_imap():
         logger.debug("IMAP health check: folder check failed for %r", config.IMAP_FOLDER)
         return _CheckResult(False, reason, True)
 
+def _check_imap_account(account):
+    """Health check for a specific account."""
+    host = account["host"]
+    port = account["port"]
+    tls_mode = account.get("tls_mode", "ssl")
+    username = account["username"]
+    password = account["password"]
+    folder = account["folder"]
+
+    logger.debug("[%s] IMAP health check: connecting to %s:%s", account["name"], host, port)
+    try:
+        use_ssl = tls_mode not in ("none", "starttls")
+        client = IMAPClient(host, port=port, ssl=use_ssl, timeout=10)
+        if tls_mode == "starttls":
+            client.starttls()
+    except Exception as e:
+        logger.debug("[%s] IMAP health check: connection failed: %s", account["name"], e)
+        return _CheckResult(False, str(e), False)
+
+    try:
+        client.login(username, password)
+    except Exception as e:
+        try:
+            client.logout()
+        except Exception:
+            pass
+        logger.debug("[%s] IMAP health check: authentication failed", account["name"])
+        return _CheckResult(False, "authentication failed: %s" % e, True)
+
+    try:
+        client.select_folder(folder)
+        client.logout()
+        logger.debug("[%s] IMAP health check: OK", account["name"])
+        return _CheckResult(True, "", False)
+    except Exception:
+        reason = "folder %r does not exist on the server" % folder
+        try:
+            folders = client.list_folders()
+            names = sorted(f[2] for f in folders)
+            reason += ". We found these folders:\n" + "\n".join("- %s" % n for n in names)
+        except Exception:
+            pass
+        try:
+            client.logout()
+        except Exception:
+            pass
+        return _CheckResult(False, reason, True)
+
 def initialize_database():
     print(_DIVIDER, flush=True)
     print("Initializing database...", flush=True)
@@ -195,6 +243,7 @@ def start_web():
     print(flush=True)
 
 def start_imap(loaded_rules):
+    """Legacy single-account IMAP start. Used when config globals are populated."""
     print(_DIVIDER, flush=True)
     print("Starting: IMAP service...", flush=True)
     print(_DIVIDER, flush=True)
@@ -274,6 +323,84 @@ def start_imap(loaded_rules):
     logger.info("IMAP service is up and ready.")
     print(flush=True)
 
+
+def start_imap_for_account(account, loaded_rules):
+    """Verify IMAP connectivity and folder existence for a specific account."""
+    acct_name = account["name"]
+    print(_DIVIDER, flush=True)
+    print("Starting: IMAP for [%s]..." % acct_name, flush=True)
+    print(_DIVIDER, flush=True)
+
+    deadline = time.monotonic() + _STARTUP_PER_SERVICE_TIMEOUT
+    client = None
+    last_reason = ""
+
+    while time.monotonic() < deadline:
+        logger.debug("[%s] Attempting IMAP connection to %s:%s", acct_name, account["host"], account["port"])
+        try:
+            client = _imap.connect(account=account)
+        except _imap.FatalImapError as e:
+            logger.error("[%s] Fatal: IMAP authentication failed: %s\n\nShutting down.", acct_name, e)
+            fatal_shutdown()
+        except Exception as e:
+            last_reason = str(e)
+            logger.debug("[%s] IMAP connection attempt failed: %s", acct_name, e)
+            time.sleep(_STARTUP_CHECK_INTERVAL)
+            continue
+
+        logger.info("[%s] Connected to %s:%s as %s", acct_name, account["host"], account["port"], account["username"])
+        break
+    else:
+        logger.error(
+            "[%s] Fatal: IMAP did not connect within %ds: %s\n\nShutting down.",
+            acct_name, _STARTUP_PER_SERVICE_TIMEOUT, last_reason
+        )
+        fatal_shutdown()
+
+    try:
+        try:
+            folder_names = _imap.list_folder_names(client)
+        except Exception as e:
+            logger.error("[%s] Fatal: Could not list IMAP folders: %s\n\nShutting down.", acct_name, e)
+            fatal_shutdown()
+
+        folder_set = set(folder_names)
+        folder_list = "\n".join("- %s" % f for f in folder_names)
+        logger.debug("[%s] Found %s IMAP folder(s)", acct_name, len(folder_names))
+
+        if account["folder"] not in folder_set:
+            logger.error(
+                "[%s] Fatal: Watched folder %r does not exist on the server. We found these folders:\n%s\n\nShutting down.",
+                acct_name, account["folder"], folder_list
+            )
+            fatal_shutdown()
+
+        destinations = {
+            action["destination"]
+            for rule in loaded_rules
+            for action in rule["actions"]
+            if action["type"] == "move"
+        }
+        missing = [d for d in sorted(destinations) if d not in folder_set]
+        if missing:
+            logger.error(
+                "[%s] Fatal: Rule destination folder(s) not found: %s\n\nWe found these folders:\n%s\n\nShutting down.",
+                acct_name, ", ".join(missing), folder_list
+            )
+            fatal_shutdown()
+
+        logger.info("[%s] All IMAP folders verified on server", acct_name)
+
+    finally:
+        try:
+            client.logout()
+        except Exception:
+            pass
+
+    logger.info("[%s] IMAP service is up and ready.", acct_name)
+    print(flush=True)
+
+
 def service_check():
     logger.debug("Running service health check")
     checks = {
@@ -281,7 +408,6 @@ def service_check():
         "redis": _check_redis,
         "unbound": _check_unbound,
         "web": _check_web,
-        "imap": _check_imap,
     }
     failed = []
     for name, fn in checks.items():

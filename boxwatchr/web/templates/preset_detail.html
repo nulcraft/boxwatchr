@@ -1,0 +1,52 @@
+{% extends "app.html" %}
+{% block title %}boxwatchr / Preset: {{ preset.name }}{% endblock %}
+
+{% block content %}
+<h1 class="h4 fw-semibold mb-4 page-title"><i class="bi bi-shield-fill page-title-icon"></i>{{ preset.name }}</h1>
+
+<p class="text-secondary small mb-4">{{ preset.description }}</p>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="card-subtitle">Patterns ({{ preset.patterns|length }})</h2>
+        <p class="small text-secondary mb-3">An email matches this preset if <strong>any</strong> of these patterns match.</p>
+        {% if preset.patterns %}
+        <ul class="list-unstyled mb-0 small">
+            {% for p in preset.patterns %}
+            <li class="mb-1">
+                <code>{{ p.field }}</code>
+                <span class="text-secondary">{{ p.operator }}</span>
+                <code>{{ p.value }}</code>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <span class="text-secondary small">No patterns defined.</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="card-subtitle">Default Actions</h2>
+        <p class="small text-secondary mb-3">Actions applied when a pattern matches.</p>
+        {% if preset.default_actions %}
+        <ul class="list-unstyled mb-0 small">
+            {% for a in preset.default_actions %}
+            <li class="mb-1">
+                {{ a.type }}
+                {% if a.destination %} <code>{{ a.destination }}</code>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <span class="text-secondary small">No actions defined.</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="d-flex gap-2">
+    <a href="/presets/{{ preset.id }}/edit" class="btn btn-outline-secondary btn-sm">Edit Patterns</a>
+    <a href="/presets" class="btn btn-outline-secondary btn-sm">Back to Presets</a>
+</div>
+{% endblock %}

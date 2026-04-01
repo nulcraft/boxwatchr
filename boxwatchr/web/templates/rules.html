@@ -95,6 +95,9 @@
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <span class="fw-semibold">{{ rule.name or "(unnamed)" }}</span>
                 <span class="badge text-bg-secondary">match {{ rule.match or "all" }}</span>
+                {% if rule.preset_id %}<span class="badge text-bg-info">preset</span>{% endif %}
+                {% if not rule.enabled %}<span class="badge text-bg-warning">disabled</span>{% endif %}
+                {% if rule.continue_processing %}<span class="badge text-bg-secondary">continue</span>{% endif %}
             </div>
             <div class="d-flex gap-2 flex-wrap">
                 <form method="post" action="/rules/{{ rule.id }}/move-up">
@@ -104,6 +107,10 @@
                 <form method="post" action="/rules/{{ rule.id }}/move-down">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-secondary btn-sm" {{ 'disabled' if loop.last }}>&#8595;</button>
+                </form>
+                <form method="post" action="/rules/{{ rule.id }}/toggle-enabled">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm">{% if rule.enabled %}Disable{% else %}Enable{% endif %}</button>
                 </form>
                 <a href="/rules/{{ rule.id }}/edit" class="btn btn-outline-secondary btn-sm">Edit</a>
                 <form method="post" action="/rules/{{ rule.id }}/run" data-rule-name="{{ rule.name }}">

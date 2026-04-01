@@ -9,66 +9,6 @@
 
     <div class="card mb-4">
         <div class="card-body">
-            <h2 class="card-subtitle">IMAP Account</h2>
-            <div class="row g-3 mb-3">
-                <div class="col-12 col-md-6">
-                    <label class="form-label">Account Name</label>
-                    <input type="text" name="account_name" class="form-control" value="{{ account.get('name', 'Default') }}">
-                </div>
-            </div>
-            <div class="row g-3 mb-3">
-                <div class="col-12 col-md-6">
-                    <label class="form-label">IMAP Host</label>
-                    <input type="text" name="imap_host" id="imap_host" class="form-control" value="{{ account.get('host', '') }}">
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label">Port</label>
-                    <input type="number" name="imap_port" id="imap_port" class="form-control" value="{{ account.get('port', 993) }}">
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label">TLS Mode</label>
-                    <select name="tls_mode" id="tls_mode" class="form-select">
-                        {% for mode in tls_modes %}
-                        <option value="{{ mode }}" {% if mode == tls_mode %}selected{% endif %}>{{ mode }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            <div class="row g-3 mb-3">
-                <div class="col-12 col-md-6">
-                    <label class="form-label">Username</label>
-                    <input type="text" name="imap_username" id="imap_username" class="form-control" value="{{ account.get('username', '') }}" autocomplete="username">
-                </div>
-                <div class="col-12 col-md-6">
-                    <label class="form-label">Password</label>
-                    <input type="password" name="imap_password" id="imap_password" class="form-control" autocomplete="new-password" placeholder="Leave blank to keep current password">
-                </div>
-            </div>
-            <div class="mb-3">
-                <button type="button" id="test-btn" class="btn btn-sm btn-outline-secondary">Test Credentials</button>
-                <span id="test-status" class="small ms-2"></span>
-            </div>
-            <div class="row g-3">
-                <div class="col-12 col-md-6">
-                    <label class="form-label">Watch Folder</label>
-                    <select name="imap_folder" id="imap_folder" class="form-select">
-                        {% set current_folder = account.get('folder', '') %}
-                        {% if folders %}
-                            {% for f in folders %}
-                            <option value="{{ f }}"{% if f == current_folder %} selected{% endif %}>{{ f }}</option>
-                            {% endfor %}
-                        {% else %}
-                            <option value="{{ current_folder }}" selected>{{ current_folder }}</option>
-                        {% endif %}
-                    </select>
-                    {% if not folders %}<div class="form-text">Test credentials to load the folder list from the server.</div>{% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card mb-4">
-        <div class="card-body">
             <h2 class="card-subtitle">Application</h2>
             <div class="row g-3">
                 <div class="col-12 col-md-4">
@@ -124,8 +64,14 @@
         </div>
     </div>
 
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="card-subtitle">IMAP Accounts</h2>
+            <p class="small text-secondary mb-2">Manage your IMAP accounts on the <a href="/accounts">Accounts page</a>.</p>
+        </div>
+    </div>
+
     <button type="submit" class="btn btn-primary">Save</button>
 </form>
 
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='scripts/config.js') }}"></script>{% endblock %}

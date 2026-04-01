@@ -12,7 +12,10 @@ def email_detail(email_id):
     try:
         with db_connection() as conn:
             row = conn.execute(
-                "SELECT * FROM emails WHERE id = ?", (email_id,)
+                """SELECT e.*, a.name AS account_name
+                   FROM emails e
+                   LEFT JOIN accounts a ON a.id = e.account_id
+                   WHERE e.id = ?""", (email_id,)
             ).fetchone()
 
             if row is None:
@@ -58,6 +61,7 @@ def email_detail(email_id):
         "processed": row["processed"],
         "processed_at": row["processed_at"],
         "processed_notes": row["processed_notes"],
+        "account_name": row["account_name"],
     }
 
     logs = [dict(r) for r in log_rows]
