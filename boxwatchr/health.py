@@ -7,7 +7,6 @@ import threading
 import collections
 import requests
 from imapclient import IMAPClient
-from imapclient.exceptions import IMAPClientError, IMAPClientAbortError
 from boxwatchr import config
 from boxwatchr.database import flush as flush_db, initialize as db_initialize, start_flusher as db_start_flusher, verify as db_verify, DB_PATH as _db_path
 from boxwatchr import imap as _imap
@@ -87,14 +86,7 @@ def _check_imap():
         client.logout()
         logger.debug("IMAP health check: OK")
         return _CheckResult(True, "", False)
-    except (IMAPClientAbortError, OSError) as e:
-        try:
-            client.logout()
-        except Exception:
-            pass
-        logger.debug("IMAP health check: connection error during folder select: %s", e)
-        return _CheckResult(False, str(e), False)
-    except IMAPClientError:
+    except Exception:
         reason = "folder %r does not exist on the server" % config.IMAP_FOLDER
         try:
             folders = client.list_folders()
@@ -208,13 +200,8 @@ def start_imap(loaded_rules):
         try:
             client = _imap.connect()
         except _imap.FatalImapError as e:
-            logger.warning(
-                "IMAP authentication failed: %s. Fix your credentials at /config — "
-                "boxwatchr will keep running and retry automatically.",
-                e
-            )
-            print(flush=True)
-            return False
+            logger.error("Fatal: IMAP authentication failed: %s\n\nShutting down.", e)
+            fatal_shutdown()
         except Exception as e:
             last_reason = str(e)
             logger.debug("IMAP connection attempt failed: %s", e)
@@ -224,38 +211,29 @@ def start_imap(loaded_rules):
         logger.info("Connected to %s:%s as %s", config.IMAP_HOST, config.IMAP_PORT, config.IMAP_USERNAME)
         break
     else:
-        logger.warning(
-            "IMAP service did not connect within %ds: %s. Fix your settings at /config — "
-            "boxwatchr will keep running and retry automatically.",
+        logger.error(
+            "Fatal: IMAP service did not start within %ds: %s\n\nShutting down.",
             _STARTUP_PER_SERVICE_TIMEOUT, last_reason
         )
-        print(flush=True)
-        return False
+        fatal_shutdown()
 
     try:
         try:
             folder_names = _imap.list_folder_names(client)
         except Exception as e:
-            logger.warning(
-                "Could not list IMAP folders: %s. Fix your settings at /config — "
-                "boxwatchr will keep running and retry automatically.",
-                e
-            )
-            print(flush=True)
-            return False
+            logger.error("Fatal: Could not list IMAP folders: %s\n\nShutting down.", e)
+            fatal_shutdown()
 
         folder_set = set(folder_names)
         folder_list = "\n".join("- %s" % f for f in folder_names)
         logger.debug("Found %s IMAP folder(s): %s", len(folder_names), ", ".join(sorted(folder_names)))
 
         if config.IMAP_FOLDER not in folder_set:
-            logger.warning(
-                "Watched folder %r does not exist on the server. We found these folders:\n%s\n"
-                "Fix your settings at /config — boxwatchr will keep running and retry automatically.",
+            logger.error(
+                "Fatal: Watched folder %r does not exist on the server. We found these folders:\n%s\n\nShutting down.",
                 config.IMAP_FOLDER, folder_list
             )
-            print(flush=True)
-            return False
+            fatal_shutdown()
 
         logger.debug("Watched folder %r verified on server", config.IMAP_FOLDER)
 
@@ -271,12 +249,11 @@ def start_imap(loaded_rules):
         )
         missing = [d for d in sorted(destinations) if d not in folder_set]
         if missing:
-            logger.warning(
-                "Rule destination folder(s) not found on the server: %s\n"
-                "We found these folders:\n%s\n"
-                "Fix your rules or create the missing folders — boxwatchr will keep running.",
+            logger.error(
+                "Fatal: Rule destination folder(s) not found on the server: %s\n\nWe found these folders:\n%s\n\nShutting down.",
                 ", ".join(missing), folder_list
             )
+            fatal_shutdown()
 
         logger.info("All IMAP folders verified on server")
 
@@ -288,7 +265,6 @@ def start_imap(loaded_rules):
 
     logger.info("IMAP service is up and ready.")
     print(flush=True)
-    return True
 
 def service_check():
     logger.debug("Running service health check")

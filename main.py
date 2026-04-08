@@ -2,12 +2,10 @@ import json
 import uuid
 import time
 import signal as _signal
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from email.header import decode_header, make_header
 from email import message_from_bytes, message_from_string
 from boxwatchr import config, imap, spam, rules, health, __version__
-from boxwatchr.spam import get_rspamd_result
-from boxwatchr.notifications import send_discord_notification
 from boxwatchr.web.app import start_dashboard
 from boxwatchr.imap import FatalImapError
 from boxwatchr.notes import action_sentence, failed_action_sentence, skipped_learn_sentence, build_notes_opener
@@ -163,7 +161,6 @@ def reprocess_pending_emails(client, current_uids):
             "recipients": [r for r in row["recipients"].split(",") if r] if row["recipients"] else [],
             "raw_headers": row["raw_headers"] or "",
             "attachments": stored_attachments,
-            "date_received": row["date_received"] or "",
         }
 
         matched_rule = rules.evaluate(email_data, spam_score=spam_score, email_id=email_id)
@@ -201,9 +198,6 @@ def reprocess_pending_emails(client, current_uids):
                         "Skipping %s action for pending email UID %s: raw message not stored",
                         action_type, uid, extra={"email_id": email_id}
                     )
-                executed.append((action, "skipped"))
-                continue
-            if action_type == "notify_discord":
                 executed.append((action, "skipped"))
                 continue
             logger.info(
@@ -248,35 +242,14 @@ def reprocess_pending_emails(client, current_uids):
                         entry["destination"] = action["destination"]
                     new_history_entries.append(entry)
 
-        retry_after = None
-        is_still_deferred = False
-        if not matched_rule and not config.DRYRUN:
-            retry_wait_s = rules.get_min_retry_wait_seconds(
-                email_data, spam_score=spam_score, email_id=email_id
-            )
-            if retry_wait_s and retry_wait_s > 0:
-                is_still_deferred = True
-                retry_after = (
-                    datetime.now(timezone.utc) + timedelta(seconds=retry_wait_s)
-                ).strftime("%Y-%m-%d %H:%M:%S")
-                processed_notes = (
-                    "Pending: no rule matched yet. Time-based rule check scheduled for %s." % retry_after
-                )
-                logger.debug(
-                    "Pending email %s still deferred: retry after %s",
-                    email_id, retry_after,
-                    extra={"email_id": email_id}
-                )
-
         enqueue_email_update(
             email_id,
             json.dumps(matched_rule) if matched_rule else None,
             actions,
-            processed=0 if (not all_ok or config.DRYRUN or is_still_deferred) else 1,
+            processed=0 if (not all_ok or config.DRYRUN) else 1,
             processed_at=processed_at,
             processed_notes=processed_notes,
             history=current_history + new_history_entries,
-            retry_after=retry_after,
         )
         logger.debug("Enqueued update for pending email %s", email_id, extra={"email_id": email_id})
 
@@ -321,24 +294,6 @@ def process_email(client, uid, message, current_uids=None):
             raw_headers = raw_text.split("\n\n", 1)[0]
         else:
             raw_headers = raw_text
-
-        body_text = ""
-        try:
-            _body_msg = message_from_bytes(raw_message) if isinstance(raw_message, bytes) else message_from_string(raw_message)
-            for part in _body_msg.walk():
-                if part.get_content_type() == "text/plain":
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        charset = part.get_content_charset() or "utf-8"
-                        try:
-                            body_text = payload.decode(charset, errors="replace")
-                        except (LookupError, UnicodeDecodeError):
-                            body_text = payload.decode("utf-8", errors="replace")
-                        if len(body_text) > 2000:
-                            body_text = body_text[:2000]
-                        break
-        except Exception as e:
-            logger.warning("Could not extract email body text: %s", e, extra={"email_id": email_id})
 
         _msg_obj = message_from_string(raw_headers)
         message_id = (_msg_obj.get("Message-ID") or "").strip()
@@ -392,16 +347,13 @@ def process_email(client, uid, message, current_uids=None):
             "recipients": recipients,
             "raw_headers": raw_headers,
             "attachments": attachments,
-            "date_received": date_received,
         }
 
         logger.info("Processing email UID %s from %s", uid, sender, extra={"email_id": email_id})
 
-        rspamd_result = get_rspamd_result(raw_message, email_id=email_id)
-        if rspamd_result is None:
+        spam_score = spam.get_rspamd_score(raw_message, email_id=email_id)
+        if spam_score is None:
             raise RuntimeError("rspamd unreachable")
-        spam_score = rspamd_result["score"]
-        rspamd_symbols = rspamd_result.get("symbols", {})
 
         matched_rule = rules.evaluate(email_data, spam_score=spam_score, email_id=email_id)
         rule_name = matched_rule["name"] if matched_rule else "none"
@@ -418,9 +370,8 @@ def process_email(client, uid, message, current_uids=None):
             extra={"email_id": email_id}
         )
 
-        imap_actions = [a for a in actions if a["type"] not in {"learn_spam", "learn_ham", "notify_discord"}]
+        imap_actions = [a for a in actions if a["type"] not in {"learn_spam", "learn_ham"}]
         learn_actions = [a for a in actions if a["type"] in {"learn_spam", "learn_ham"}]
-        discord_actions = [a for a in actions if a["type"] == "notify_discord"]
 
         for action in imap_actions:
             action_type = action["type"]
@@ -459,41 +410,11 @@ def process_email(client, uid, message, current_uids=None):
                     if ok:
                         rspamd_learned = "ham"
 
-        discord_sent = False
-        for action in discord_actions:
-            webhook_url = action.get("webhook_url", "")
-            if config.DRYRUN:
-                logger.debug(
-                    "DRYRUN: would send Discord notification for UID %s",
-                    uid, extra={"email_id": email_id}
-                )
-            else:
-                ok = send_discord_notification(
-                    webhook_url, email_data, rule_name,
-                    spam_score=spam_score, email_id=email_id,
-                    actions=actions
-                )
-                if ok:
-                    discord_sent = True
-
-        if matched_rule and not discord_actions and config.DISCORD_WEBHOOK_URL:
-            if not config.DRYRUN:
-                send_discord_notification(
-                    config.DISCORD_WEBHOOK_URL, email_data, rule_name,
-                    spam_score=spam_score, email_id=email_id,
-                    actions=actions
-                )
-
         notes_parts = [build_notes_opener(matched_rule, config.DRYRUN)]
         if actions:
             for action in actions:
                 if action["type"] in {"learn_spam", "learn_ham"}:
                     if config.DRYRUN or rspamd_learned is not None:
-                        notes_parts.append(action_sentence(action, config.DRYRUN))
-                    else:
-                        notes_parts.append(failed_action_sentence(action))
-                elif action["type"] == "notify_discord":
-                    if config.DRYRUN or discord_sent:
                         notes_parts.append(action_sentence(action, config.DRYRUN))
                     else:
                         notes_parts.append(failed_action_sentence(action))
@@ -508,32 +429,12 @@ def process_email(client, uid, message, current_uids=None):
         history = []
         if not config.DRYRUN:
             for a in actions:
-                if a["type"] in {"learn_spam", "learn_ham", "notify_discord"}:
+                if a["type"] in {"learn_spam", "learn_ham"}:
                     continue
                 entry = {"at": processed_at, "by": "boxwatchr", "action": a["type"]}
                 if "destination" in a:
                     entry["destination"] = a["destination"]
                 history.append(entry)
-
-        retry_after = None
-        is_deferred = False
-        if not matched_rule and not config.DRYRUN:
-            retry_wait_s = rules.get_min_retry_wait_seconds(
-                email_data, spam_score=spam_score, email_id=email_id
-            )
-            if retry_wait_s and retry_wait_s > 0:
-                is_deferred = True
-                retry_after = (
-                    datetime.now(timezone.utc) + timedelta(seconds=retry_wait_s)
-                ).strftime("%Y-%m-%d %H:%M:%S")
-                processed_notes = (
-                    "Pending: no rule matched yet. Time-based rule check scheduled for %s." % retry_after
-                )
-                logger.info(
-                    "Email UID %s deferred: time-based rule may match in %.0fs (retry after %s)",
-                    uid, retry_wait_s, retry_after,
-                    extra={"email_id": email_id}
-                )
 
         enqueue_email(
             uid=str(uid),
@@ -548,7 +449,7 @@ def process_email(client, uid, message, current_uids=None):
             actions=actions,
             raw_headers=raw_headers,
             attachments=attachments,
-            processed=0 if (config.DRYRUN or is_deferred) else 1,
+            processed=0 if config.DRYRUN else 1,
             processed_at=processed_at,
             processed_notes=processed_notes,
             email_id=email_id,
@@ -557,9 +458,6 @@ def process_email(client, uid, message, current_uids=None):
             rspamd_learned=rspamd_learned,
             account_id=config.ACCOUNT_ID,
             content_hash=content_hash,
-            rspamd_symbols=json.dumps(rspamd_symbols) if rspamd_symbols else None,
-            body_text=body_text or None,
-            retry_after=retry_after,
         )
 
         email_enqueued = True
@@ -599,11 +497,7 @@ def main():
 
     loaded_rules = health.load_rules_startup()
 
-    if not health.start_imap(loaded_rules):
-        logger.warning(
-            "IMAP is not ready. boxwatchr will keep running with the web UI — "
-            "fix your settings at /config and it will connect automatically."
-        )
+    health.start_imap(loaded_rules)
 
     _print_startup_checks(loaded_rules)
 
@@ -614,36 +508,8 @@ def main():
     try:
         while not _shutdown:
             logger.debug("Starting connection cycle: connecting for startup scan")
-            try:
-                startup_client = imap.connect()
-            except FatalImapError as e:
-                if _shutdown:
-                    break
-                logger.warning(
-                    "IMAP authentication error: %s. Fix your settings at /config — retrying automatically.",
-                    e
-                )
-                health.wait_for_services()
-                logger.info("Services recovered, reconnecting...")
-                continue
-
-            try:
-                imap.select_folder(startup_client)
-            except Exception as e:
-                try:
-                    startup_client.logout()
-                except Exception:
-                    pass
-                if _shutdown:
-                    break
-                logger.warning(
-                    "IMAP folder error: %s. Fix your settings at /config — retrying automatically.",
-                    e
-                )
-                health.wait_for_services()
-                logger.info("Services recovered, reconnecting...")
-                continue
-
+            startup_client = imap.connect()
+            imap.select_folder(startup_client)
             try:
                 current_uids = startup_scan(startup_client)
                 reprocess_pending_emails(startup_client, current_uids)
@@ -654,22 +520,11 @@ def main():
             if _shutdown:
                 break
 
-            def _rescan_and_reprocess(client):
-                current_uids = startup_scan(client)
-                reprocess_pending_emails(client, current_uids)
-
             try:
                 logger.debug("Entering IMAP watch loop")
-                imap.watch(process_email, rescan_callback=_rescan_and_reprocess)
-            except FatalImapError as e:
-                if _shutdown:
-                    break
-                logger.warning(
-                    "IMAP authentication error: %s. Fix your settings at /config — retrying automatically.",
-                    e
-                )
-                health.wait_for_services()
-                logger.info("Services recovered, reconnecting...")
+                imap.watch(process_email, rescan_callback=startup_scan)
+            except FatalImapError:
+                raise
             except Exception as e:
                 if _shutdown:
                     break
@@ -677,6 +532,8 @@ def main():
                 health.wait_for_services()
                 logger.info("Services recovered, reconnecting...")
 
+    except FatalImapError as e:
+        _fatal_exit(str(e))
     except KeyboardInterrupt:
         logger.info("Shutting down")
 

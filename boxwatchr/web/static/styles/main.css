@@ -4,9 +4,9 @@
 
 :root {
     /* Typography */
-    --fz-xs:   12px;
-    --fz-sm:   13px;
-    --fz-base: 14px;
+    --fz-xs:   11px;
+    --fz-sm:   12px;
+    --fz-base: 13px;
 
     /* Primary (blue) */
     --c-primary-text:          #cfe2ff;
@@ -108,7 +108,7 @@
 }
 
 .site-logo-icon {
-    width: 24px;
+    width: 48px;
     flex-shrink: 0;
 }
 
@@ -350,10 +350,6 @@ th {
 
 .card-rule {
     border-left: 3px solid var(--bs-primary) !important;
-}
-
-.rule-disabled {
-    opacity: 0.55;
 }
 
 /* ============================================================

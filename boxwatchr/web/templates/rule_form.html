@@ -8,22 +8,8 @@
 <div class="alert alert-danger py-2 px-3 small mb-4">{{ error }}</div>
 {% endif %}
 
-{% if templates %}
-<div class="card mb-3">
-    <div class="card-body">
-        <h2 class="card-subtitle">Start from a template</h2>
-        <div class="d-flex flex-wrap gap-2 mt-2">
-            {% for tmpl in templates %}
-            <a href="{{ url_for('rule_new', template=tmpl.name) }}" class="btn btn-outline-secondary btn-sm">{{ tmpl.name }}</a>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-{% endif %}
-
 <form method="post" action="{{ form_action }}">
 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-<input type="hidden" name="condition_groups_json" id="condition-groups-json" value="{{ rule.condition_groups | tojson if rule.condition_groups else '[]' }}">
 
     <div class="card mb-3">
         <div class="card-body">
@@ -52,7 +38,7 @@
 
             <div class="mb-3">
                 <p class="text-secondary small mb-1">For an address like <code>user@mail.example.com</code>:</p>
-                <ul class="text-secondary small mb-2 ps-3">
+                <ul class="text-secondary small mb-0 ps-3">
                     <li><strong>Full address:</strong> the entire address (<code>user@mail.example.com</code>)</li>
                     <li><strong>Username:</strong> everything before the @ (<code>user</code>)</li>
                     <li><strong>Full domain:</strong> everything after the @ (<code>mail.example.com</code>)</li>
@@ -60,12 +46,11 @@
                     <li><strong>Domain (no subdomain):</strong> the domain only, no subdomain or TLD (<code>example</code>)</li>
                     <li><strong>TLD:</strong> top-level domain only (<code>com</code>)</li>
                 </ul>
-                <p class="text-secondary small mb-0"><strong>Username</strong>, <strong>Subdomain + domain</strong>, and <strong>Domain (no subdomain)</strong> ignore punctuation when matching. Hyphens, dots, and other non-alphanumeric characters from both the address and your value are stripped completely before comparing. <strong>Full address</strong>, <strong>Full domain</strong>, and <strong>TLD</strong> match the exact text, so your value must include any hyphens or dots as they appear.</p>
             </div>
 
             <div id="conditions-container">
                 {% for c in rule.conditions %}
-                {% set is_numeric = c.field in ("rspamd_score", "email_age_days", "email_age_hours") %}
+                {% set is_numeric = c.field == "rspamd_score" %}
                 <div class="condition-row d-flex gap-2 align-items-start mb-2 flex-wrap flex-sm-nowrap">
                     <select name="condition_field" class="form-select cond-field">
                         <optgroup label="Sender">
@@ -89,16 +74,12 @@
                             <option value="raw_headers" {% if c.field == "raw_headers" %}selected{% endif %}>Raw headers</option>
                         </optgroup>
                         <optgroup label="Attachment">
-                            <option value="attachment_name" {% if c.field == "attachment_name" %}selected{% endif %}>Attachment name</option>
-                            <option value="attachment_extension" {% if c.field == "attachment_extension" %}selected{% endif %}>Attachment extension</option>
-                            <option value="attachment_content_type" {% if c.field == "attachment_content_type" %}selected{% endif %}>Attachment content type</option>
+                            <option value="attachment_name" {% if c.field == "attachment_name" %}selected{% endif %}>Attachment — file name</option>
+                            <option value="attachment_extension" {% if c.field == "attachment_extension" %}selected{% endif %}>Attachment — extension</option>
+                            <option value="attachment_content_type" {% if c.field == "attachment_content_type" %}selected{% endif %}>Attachment — content type</option>
                         </optgroup>
                         <optgroup label="Spam Score">
                             <option value="rspamd_score" {% if c.field == "rspamd_score" %}selected{% endif %}>rspamd score</option>
-                        </optgroup>
-                        <optgroup label="Time">
-                            <option value="email_age_days" {% if c.field == "email_age_days" %}selected{% endif %}>Email age (days)</option>
-                            <option value="email_age_hours" {% if c.field == "email_age_hours" %}selected{% endif %}>Email age (hours)</option>
                         </optgroup>
                     </select>
                     <select name="condition_operator" class="form-select cond-operator">
@@ -112,7 +93,6 @@
                         <option value="not_equals" {% if c.operator == "not_equals" %}selected{% endif %}>does not equal</option>
                         <option value="contains" {% if c.operator == "contains" %}selected{% endif %}>contains</option>
                         <option value="not_contains" {% if c.operator == "not_contains" %}selected{% endif %}>does not contain</option>
-                        <option value="matches_regex" {% if c.operator == "matches_regex" %}selected{% endif %}>matches regex</option>
                         <option value="is_empty" {% if c.operator == "is_empty" %}selected{% endif %}>is empty</option>
                         {% endif %}
                     </select>
@@ -144,12 +124,10 @@
                         <option value="move" {% if a.type == "move" %}selected{% endif %}>Move to folder</option>
                         <option value="mark_read" {% if a.type == "mark_read" %}selected{% endif %}>Mark as read</option>
                         <option value="mark_unread" {% if a.type == "mark_unread" %}selected{% endif %}>Mark as unread</option>
-                        <option value="flag" {% if a.type == "flag" %}selected{% endif %}>Mark as flagged</option>
-                        <option value="unflag" {% if a.type == "unflag" %}selected{% endif %}>Mark as unflagged</option>
+                        <option value="flag" {% if a.type == "flag" %}selected{% endif %}>Flag message</option>
+                        <option value="unflag" {% if a.type == "unflag" %}selected{% endif %}>Remove flag</option>
                         <option value="learn_spam" {% if a.type == "learn_spam" %}selected{% endif %}>Submit to rspamd as spam</option>
                         <option value="learn_ham" {% if a.type == "learn_ham" %}selected{% endif %}>Submit to rspamd as ham</option>
-                        <option value="notify_discord" {% if a.type == "notify_discord" %}selected{% endif %}>Send Discord notification</option>
-                        <option value="add_label" {% if a.type == "add_label" %}selected{% endif %}>Add label/tag</option>
                     </select>
                     {% if folders %}
                     <select name="action_destination" class="form-select action-dest flex-grow-1{% if a.type != 'move' %} d-none{% endif %}"{% if a.type != 'move' %} disabled{% endif %}>
@@ -164,8 +142,6 @@
                     {% else %}
                     <input name="action_destination" type="text" class="form-control action-dest flex-grow-1{% if a.type != 'move' %} d-none{% endif %}" placeholder="Folder (e.g. INBOX.Newsletters)" value="{{ a.destination if a.type == 'move' else '' }}"{% if a.type != 'move' %} disabled{% endif %}>
                     {% endif %}
-                    <input name="action_webhook_url" type="text" class="form-control action-webhook flex-grow-1{% if a.type != 'notify_discord' %} d-none{% endif %}" placeholder="Discord webhook URL" value="{{ a.webhook_url if a.type == 'notify_discord' else '' }}"{% if a.type != 'notify_discord' %} disabled{% endif %}>
-                    <input name="action_label" type="text" class="form-control action-label flex-grow-1{% if a.type != 'add_label' %} d-none{% endif %}" placeholder="Label name" value="{{ a.label if a.type == 'add_label' else '' }}"{% if a.type != 'add_label' %} disabled{% endif %}>
                     <button type="button" class="btn btn-outline-danger flex-shrink-0" data-action="remove-action">&times;</button>
                 </div>
                 {% endfor %}
@@ -209,16 +185,12 @@
                 <option value="raw_headers">Raw headers</option>
             </optgroup>
             <optgroup label="Attachment">
-                <option value="attachment_name">Attachment name</option>
-                <option value="attachment_extension">Attachment extension</option>
-                <option value="attachment_content_type">Attachment content type</option>
+                <option value="attachment_name">Attachment — file name</option>
+                <option value="attachment_extension">Attachment — extension</option>
+                <option value="attachment_content_type">Attachment — content type</option>
             </optgroup>
             <optgroup label="Spam Score">
                 <option value="rspamd_score">rspamd score</option>
-            </optgroup>
-            <optgroup label="Time">
-                <option value="email_age_days">Email age (days)</option>
-                <option value="email_age_hours">Email age (hours)</option>
             </optgroup>
         </select>
         <select name="condition_operator" class="form-select cond-operator">
@@ -226,7 +198,6 @@
             <option value="not_equals">does not equal</option>
             <option value="contains">contains</option>
             <option value="not_contains">does not contain</option>
-            <option value="matches_regex">matches regex</option>
             <option value="is_empty">is empty</option>
         </select>
         <input name="condition_value" type="text" class="form-control value-text flex-grow-1" placeholder="Value">
@@ -244,12 +215,10 @@
             <option value="move">Move to folder</option>
             <option value="mark_read">Mark as read</option>
             <option value="mark_unread">Mark as unread</option>
-            <option value="flag">Mark as flagged</option>
-            <option value="unflag">Mark as unflagged</option>
+            <option value="flag">Flag message</option>
+            <option value="unflag">Remove flag</option>
             <option value="learn_spam">Submit to rspamd as spam</option>
             <option value="learn_ham">Submit to rspamd as ham</option>
-            <option value="notify_discord">Send Discord notification</option>
-            <option value="add_label">Add label/tag</option>
         </select>
         {% if folders %}
         <select name="action_destination" class="form-select action-dest flex-grow-1 d-none" disabled>
@@ -261,8 +230,6 @@
         {% else %}
         <input name="action_destination" type="text" class="form-control action-dest flex-grow-1 d-none" placeholder="Folder (e.g. INBOX.Newsletters)" disabled>
         {% endif %}
-        <input name="action_webhook_url" type="text" class="form-control action-webhook flex-grow-1 d-none" placeholder="Discord webhook URL" disabled>
-        <input name="action_label" type="text" class="form-control action-label flex-grow-1 d-none" placeholder="Label name" disabled>
         <button type="button" class="btn btn-outline-danger flex-shrink-0" data-action="remove-action">&times;</button>
     </div>
 </template>

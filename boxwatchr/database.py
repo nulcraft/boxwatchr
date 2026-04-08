@@ -17,7 +17,7 @@ logger = get_logger("boxwatchr.database")
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "boxwatchr.db")
 
-CURRENT_VERSION = 3
+CURRENT_VERSION = 2
 
 _log_queue = collections.deque()
 _email_queue = collections.deque()
@@ -31,7 +31,6 @@ _processing_active = False
 _processing_lock = threading.Lock()
 _flush_failures = 0
 _MAX_FLUSH_FAILURES = 20
-_UNSET = object()
 
 def set_processing(active):
     global _processing_active
@@ -83,17 +82,8 @@ def _migrate_v1_to_v2(conn):
         conn.execute("UPDATE emails SET content_hash = ? WHERE id = ?", (h, row["id"]))
     logger.info("Migration v1 to v2 complete: backfilled content_hash for %s existing record(s)", len(rows))
 
-def _migrate_v2_to_v3(conn):
-    logger.info("Migrating database schema from v2 to v3")
-    conn.execute("ALTER TABLE rules ADD COLUMN condition_groups TEXT NOT NULL DEFAULT '[]'")
-    conn.execute("ALTER TABLE rules ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
-    conn.execute("ALTER TABLE emails ADD COLUMN rspamd_symbols TEXT")
-    conn.execute("ALTER TABLE emails ADD COLUMN body_text TEXT")
-    conn.execute("ALTER TABLE emails ADD COLUMN retry_after TEXT")
-    logger.info("Migration v2 to v3 complete")
-
 def _create_schema(conn):
-    logger.info("Creating database schema (v3)")
+    logger.info("Creating database schema (v2)")
 
     conn.execute("""
         CREATE TABLE accounts (
@@ -120,9 +110,7 @@ def _create_schema(conn):
             match               TEXT NOT NULL DEFAULT 'all',
             conditions          TEXT NOT NULL DEFAULT '[]',
             actions             TEXT NOT NULL DEFAULT '[]',
-            condition_groups    TEXT NOT NULL DEFAULT '[]',
-            continue_processing INTEGER NOT NULL DEFAULT 0,
-            enabled             INTEGER NOT NULL DEFAULT 1
+            continue_processing INTEGER NOT NULL DEFAULT 0
         )
     """)
     conn.execute("CREATE INDEX idx_rules_account_position ON rules (account_id, position)")
@@ -151,9 +139,6 @@ def _create_schema(conn):
             message_id TEXT,
             rspamd_learned TEXT,
             content_hash TEXT,
-            rspamd_symbols TEXT,
-            body_text TEXT,
-            retry_after TEXT,
             UNIQUE(uid, folder, account_id)
         )
     """)
@@ -214,12 +199,6 @@ def initialize():
                 _set_version(conn, 2)
                 conn.commit()
                 logger.info("Database migrated to version 2")
-
-            if current_version < 3:
-                _migrate_v2_to_v3(conn)
-                _set_version(conn, 3)
-                conn.commit()
-                logger.info("Database migrated to version 3")
 
     except sqlite3.Error as e:
         logger.error("Failed to initialize database: %s", e)
@@ -311,7 +290,7 @@ def get_rule(rule_id):
         logger.error("Failed to fetch rule %s: %s", rule_id, e)
         return None
 
-def insert_rule(account_id, name, match, conditions_json, actions_json, condition_groups_json="[]", continue_processing=0, enabled=1):
+def insert_rule(account_id, name, match, conditions_json, actions_json, continue_processing=0):
     rule_id = str(uuid.uuid4())
     try:
         with _db() as conn:
@@ -321,22 +300,22 @@ def insert_rule(account_id, name, match, conditions_json, actions_json, conditio
             ).fetchone()
             position = row["next_pos"]
             conn.execute("""
-                INSERT INTO rules (id, account_id, position, name, match, conditions, actions, condition_groups, continue_processing, enabled)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (rule_id, account_id, position, name, match, conditions_json, actions_json, condition_groups_json, int(continue_processing), int(enabled)))
+                INSERT INTO rules (id, account_id, position, name, match, conditions, actions, continue_processing)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (rule_id, account_id, position, name, match, conditions_json, actions_json, int(continue_processing)))
             conn.commit()
     except sqlite3.Error as e:
         logger.error("Failed to insert rule: %s", e)
         raise
     return rule_id
 
-def update_rule(rule_id, name, match, conditions_json, actions_json, condition_groups_json="[]", continue_processing=0, enabled=1):
+def update_rule(rule_id, name, match, conditions_json, actions_json, continue_processing=0):
     try:
         with _db() as conn:
             conn.execute("""
-                UPDATE rules SET name = ?, match = ?, conditions = ?, actions = ?, condition_groups = ?, continue_processing = ?, enabled = ?
+                UPDATE rules SET name = ?, match = ?, conditions = ?, actions = ?, continue_processing = ?
                 WHERE id = ?
-            """, (name, match, conditions_json, actions_json, condition_groups_json, int(continue_processing), int(enabled), rule_id))
+            """, (name, match, conditions_json, actions_json, int(continue_processing), rule_id))
             conn.commit()
     except sqlite3.Error as e:
         logger.error("Failed to update rule %s: %s", rule_id, e)
@@ -398,102 +377,6 @@ def move_rule_down(rule_id, account_id):
         logger.error("Failed to move rule %s down: %s", rule_id, e)
         raise
 
-def duplicate_rule(rule_id, account_id):
-    try:
-        with _db() as conn:
-            rule = conn.execute(
-                "SELECT * FROM rules WHERE id = ? AND account_id = ?", (rule_id, account_id)
-            ).fetchone()
-            if not rule:
-                return None
-            new_id = str(uuid.uuid4())
-            row = conn.execute(
-                "SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM rules WHERE account_id = ?",
-                (account_id,)
-            ).fetchone()
-            position = row["next_pos"]
-            conn.execute("""
-                INSERT INTO rules (id, account_id, position, name, match, conditions, actions, condition_groups, continue_processing, enabled)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                new_id, account_id, position, rule["name"] + " (copy)", rule["match"],
-                rule["conditions"], rule["actions"],
-                rule["condition_groups"] if "condition_groups" in rule.keys() else "[]",
-                rule["continue_processing"], rule["enabled"]
-            ))
-            conn.commit()
-            return new_id
-    except sqlite3.Error as e:
-        logger.error("Failed to duplicate rule %s: %s", rule_id, e)
-        raise
-
-def get_rule_stats(account_id):
-    try:
-        with _db() as conn:
-            rows = conn.execute("""
-                SELECT COALESCE(JSON_EXTRACT(rule_matched, '$.id'), JSON_EXTRACT(rule_matched, '$.name')) AS rule_key,
-                       COUNT(*) AS cnt,
-                       MAX(processed_at) AS last_at
-                FROM emails
-                WHERE rule_matched IS NOT NULL AND account_id = ?
-                GROUP BY rule_key
-            """, (account_id,)).fetchall()
-            return {
-                row["rule_key"]: {"count": row["cnt"], "last_triggered": row["last_at"]}
-                for row in rows if row["rule_key"]
-            }
-    except sqlite3.Error as e:
-        logger.error("Failed to get rule stats for account %s: %s", account_id, e)
-        return {}
-
-def get_hourly_stats():
-    try:
-        with _db() as conn:
-            rows = conn.execute("""
-                SELECT strftime('%Y-%m-%d %H:00:00', date_received) AS hour,
-                       COUNT(*) AS count
-                FROM emails
-                WHERE date_received >= datetime('now', '-24 hours')
-                GROUP BY hour
-                ORDER BY hour
-            """).fetchall()
-            return [{"hour": row["hour"], "count": row["count"]} for row in rows]
-    except sqlite3.Error as e:
-        logger.error("Failed to get hourly stats: %s", e)
-        return []
-
-def get_top_rspamd_symbols(limit=10):
-    try:
-        with _db() as conn:
-            rows = conn.execute("""
-                SELECT rspamd_symbols FROM emails
-                WHERE rspamd_symbols IS NOT NULL
-                  AND date_received >= datetime('now', '-30 days')
-            """).fetchall()
-            symbol_counts = {}
-            symbol_scores = {}
-            for row in rows:
-                try:
-                    symbols = json.loads(row["rspamd_symbols"])
-                except (json.JSONDecodeError, TypeError):
-                    continue
-                if isinstance(symbols, dict):
-                    for name, details in symbols.items():
-                        if not name:
-                            continue
-                        symbol_counts[name] = symbol_counts.get(name, 0) + 1
-                        score = details.get("score", 0) if isinstance(details, dict) else 0
-                        symbol_scores[name] = symbol_scores.get(name, 0) + score
-            result = []
-            for name, cnt in symbol_counts.items():
-                avg_score = symbol_scores[name] / cnt if cnt > 0 else 0
-                result.append({"symbol": name, "count": cnt, "avg_score": round(avg_score, 4)})
-            result.sort(key=lambda x: x["count"], reverse=True)
-            return result[:limit]
-    except sqlite3.Error as e:
-        logger.error("Failed to get top rspamd symbols: %s", e)
-        return []
-
 def _renumber_rule_positions(conn, account_id):
     rows = conn.execute(
         "SELECT id FROM rules WHERE account_id = ? ORDER BY position ASC",
@@ -527,22 +410,16 @@ def _flush_loop():
 
 def _maybe_prune(conn):
     global _last_prune_time
+    if config.DB_PRUNE_DAYS <= 0:
+        return
     now = time.time()
     if now - _last_prune_time < _PRUNE_INTERVAL:
         return
     _last_prune_time = now
-
-    if config.DB_PRUNE_DAYS > 0:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=config.DB_PRUNE_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
-        result = conn.execute("DELETE FROM logs WHERE logged_at < ?", (cutoff,))
-        if result.rowcount > 0:
-            logger.info("Pruned %s log entries older than %s days", result.rowcount, config.DB_PRUNE_DAYS)
-
-    if config.EMAIL_RETENTION_DAYS > 0:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=config.EMAIL_RETENTION_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
-        result = conn.execute("DELETE FROM emails WHERE processed_at < ?", (cutoff,))
-        if result.rowcount > 0:
-            logger.info("Pruned %s email entries older than %s days", result.rowcount, config.EMAIL_RETENTION_DAYS)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=config.DB_PRUNE_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
+    result = conn.execute("DELETE FROM logs WHERE logged_at < ?", (cutoff,))
+    if result.rowcount > 0:
+        logger.info("Pruned %s log entries older than %s days", result.rowcount, config.DB_PRUNE_DAYS)
 
 def _flush():
     global _flush_failures
@@ -589,9 +466,8 @@ def _flush():
                 INSERT INTO emails (
                     id, account_id, uid, folder, sender, recipients, subject, date_received, message_size,
                     spam_score, rule_matched, actions, history, raw_headers, attachments,
-                    processed, processed_at, processed_notes, message_id, rspamd_learned, content_hash,
-                    rspamd_symbols, body_text, retry_after
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    processed, processed_at, processed_notes, message_id, rspamd_learned, content_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(uid, folder, account_id) DO UPDATE SET
                     sender = excluded.sender,
                     recipients = excluded.recipients,
@@ -605,8 +481,7 @@ def _flush():
                 item["spam_score"], item["rule_matched"], item["actions"], item["history"],
                 item["raw_headers"], item["attachments"],
                 item["processed"], item["processed_at"], item["processed_notes"],
-                item["message_id"], item["rspamd_learned"], item.get("content_hash"),
-                item.get("rspamd_symbols"), item.get("body_text"), item.get("retry_after")
+                item["message_id"], item["rspamd_learned"], item.get("content_hash")
             ))
 
         for item in updates_batch:
@@ -630,9 +505,6 @@ def _flush():
             if item["rspamd_learned"] is not None:
                 cols.append("rspamd_learned = ?")
                 vals.append(item["rspamd_learned"])
-            if item.get("retry_after") is not _UNSET:
-                cols.append("retry_after = ?")
-                vals.append(item.get("retry_after"))
             vals.append(item["id"])
             conn.execute(
                 "UPDATE emails SET %s WHERE id = ?" % ", ".join(cols),
@@ -736,8 +608,7 @@ def update_email_uid(email_id, uid):
 def enqueue_email(uid, folder, sender, recipients, subject, date_received, message_size,
                   spam_score, rule_matched, actions, raw_headers, attachments, processed,
                   processed_at, processed_notes, email_id=None, history=None,
-                  message_id=None, rspamd_learned=None, account_id=None, content_hash=None,
-                  rspamd_symbols=None, body_text=None, retry_after=None):
+                  message_id=None, rspamd_learned=None, account_id=None, content_hash=None):
     with _queue_lock:
         _email_queue.append({
             "id": email_id,
@@ -761,16 +632,13 @@ def enqueue_email(uid, folder, sender, recipients, subject, date_received, messa
             "message_id": message_id,
             "rspamd_learned": rspamd_learned,
             "content_hash": content_hash,
-            "rspamd_symbols": rspamd_symbols,
-            "body_text": body_text,
-            "retry_after": retry_after,
         })
         queue_size = len(_email_queue)
     logger.debug("Enqueued email uid=%s id=%s (email queue size: %s)", uid, email_id, queue_size)
     return email_id
 
 def enqueue_email_update(email_id, rule_matched, actions, processed, processed_at, processed_notes,
-                         history=None, rspamd_learned=None, retry_after=_UNSET):
+                         history=None, rspamd_learned=None):
     with _queue_lock:
         _email_update_queue.append({
             "id": email_id,
@@ -781,7 +649,6 @@ def enqueue_email_update(email_id, rule_matched, actions, processed, processed_a
             "processed_notes": processed_notes,
             "history": history,
             "rspamd_learned": rspamd_learned,
-            "retry_after": retry_after,
         })
         queue_size = len(_email_update_queue)
     logger.debug("Enqueued email update id=%s processed=%s (update queue size: %s)", email_id, processed, queue_size)
@@ -839,15 +706,11 @@ def get_unprocessed_emails(account_id=None):
         with _db() as conn:
             if account_id is not None:
                 rows = conn.execute(
-                    "SELECT * FROM emails WHERE processed = 0 AND account_id = ? "
-                    "AND (retry_after IS NULL OR retry_after <= datetime('now'))",
+                    "SELECT * FROM emails WHERE processed = 0 AND account_id = ?",
                     (account_id,)
                 ).fetchall()
             else:
-                rows = conn.execute(
-                    "SELECT * FROM emails WHERE processed = 0 "
-                    "AND (retry_after IS NULL OR retry_after <= datetime('now'))"
-                ).fetchall()
+                rows = conn.execute("SELECT * FROM emails WHERE processed = 0").fetchall()
             logger.debug("Found %s unprocessed email record(s)", len(rows))
             return rows
 
