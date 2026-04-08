@@ -82,6 +82,15 @@ def _migrate_v1_to_v2(conn):
         conn.execute("UPDATE emails SET content_hash = ? WHERE id = ?", (h, row["id"]))
     logger.info("Migration v1 to v2 complete: backfilled content_hash for %s existing record(s)", len(rows))
 
+def _migrate_v3_to_v2(conn):
+    logger.info("Migrating database schema from v3 to v2 (removing 1.1.0 additions)")
+    conn.execute("ALTER TABLE rules DROP COLUMN condition_groups")
+    conn.execute("ALTER TABLE rules DROP COLUMN enabled")
+    conn.execute("ALTER TABLE emails DROP COLUMN rspamd_symbols")
+    conn.execute("ALTER TABLE emails DROP COLUMN body_text")
+    conn.execute("ALTER TABLE emails DROP COLUMN retry_after")
+    logger.info("Migration v3 to v2 complete")
+
 def _create_schema(conn):
     logger.info("Creating database schema (v2)")
 
@@ -180,6 +189,12 @@ def initialize():
                 return
 
             if current_version > CURRENT_VERSION:
+                if current_version == 3 and CURRENT_VERSION == 2:
+                    _migrate_v3_to_v2(conn)
+                    _set_version(conn, 2)
+                    conn.commit()
+                    logger.info("Database downgraded from version 3 to version 2")
+                    return
                 logger.error(
                     "Database version %s is newer than the application expects (%s). "
                     "Please update boxwatchr.",
