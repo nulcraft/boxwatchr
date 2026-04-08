@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-04-08
+
+### Fixed
+- Switched base image from `debian:trixie-slim` to `debian:bookworm-slim` to resolve TLS/SSL connection failures when connecting to IMAP servers. (#60)
+
 ## [1.1.0] - 2026-04-08
 
 ### Added
