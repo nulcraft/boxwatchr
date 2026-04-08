@@ -59,64 +59,6 @@ def get_rspamd_score(raw_message, email_id=None):
         logger.error("Unexpected error during rspamd score check: %s", e, extra={"email_id": email_id})
         return None
 
-def get_rspamd_result(raw_message, email_id=None):
-    url = "http://%s:%s/checkv2" % (config.RSPAMD_HOST, config.RSPAMD_PORT)
-    logger.debug("Submitting message to rspamd at %s", url, extra={"email_id": email_id})
-
-    try:
-        response = requests.post(
-            url,
-            data=raw_message,
-            headers={"Content-Type": "text/plain"},
-            timeout=10
-        )
-
-        if response.status_code != 200:
-            logger.error(
-                "rspamd returned status %s: %s",
-                response.status_code,
-                response.text,
-                extra={"email_id": email_id}
-            )
-            return None
-
-        result = response.json()
-        score = result.get("score", 0.0)
-        raw_symbols = result.get("symbols", {})
-
-        logger.debug(
-            "rspamd score: %.2f, symbols fired: %s",
-            score,
-            len(raw_symbols),
-            extra={"email_id": email_id}
-        )
-
-        symbols = {}
-        for symbol_name, details in raw_symbols.items():
-            sym_score = details.get("score", 0.0)
-            sym_desc = details.get("description", "")
-            symbols[symbol_name] = {"score": sym_score, "description": sym_desc}
-            logger.debug(
-                "Symbol: %s (score: %.2f)",
-                symbol_name,
-                sym_score,
-                extra={"email_id": email_id}
-            )
-
-        return {"score": score, "symbols": symbols}
-
-    except requests.exceptions.Timeout:
-        logger.error("rspamd request timed out", extra={"email_id": email_id})
-        return None
-
-    except requests.exceptions.ConnectionError:
-        logger.error("Could not connect to rspamd at %s", url, extra={"email_id": email_id})
-        return None
-
-    except Exception as e:
-        logger.error("Unexpected error during rspamd score check: %s", e, extra={"email_id": email_id})
-        return None
-
 def learn_spam(raw_message, email_id=None):
     return _learn(raw_message, "spam", email_id)
 

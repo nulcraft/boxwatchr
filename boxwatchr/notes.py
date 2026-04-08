@@ -16,10 +16,6 @@ def action_sentence(action, dry_run):
             return "Would have submitted to rspamd as spam."
         if t == "learn_ham":
             return "Would have submitted to rspamd as ham."
-        if t == "notify_discord":
-            return "Would have sent Discord notification."
-        if t == "add_label":
-            return "Would have added label '%s'." % action.get("label", "")
     else:
         if t == "move":
             return "Moved to %s." % dest
@@ -35,10 +31,6 @@ def action_sentence(action, dry_run):
             return "Submitted to rspamd as spam."
         if t == "learn_ham":
             return "Submitted to rspamd as ham."
-        if t == "notify_discord":
-            return "Sent Discord notification."
-        if t == "add_label":
-            return "Added label '%s'." % action.get("label", "")
     return ""
 
 def failed_action_sentence(action):
@@ -58,10 +50,6 @@ def failed_action_sentence(action):
         return "Failed to submit to rspamd as spam."
     if t == "learn_ham":
         return "Failed to submit to rspamd as ham."
-    if t == "notify_discord":
-        return "Failed to send Discord notification."
-    if t == "add_label":
-        return "Failed to add label '%s'." % action.get("label", "")
     return "Action failed."
 
 def skipped_learn_sentence(action):
@@ -70,8 +58,6 @@ def skipped_learn_sentence(action):
         return "Skipped rspamd spam learning: raw message not available."
     if t == "learn_ham":
         return "Skipped rspamd ham learning: raw message not available."
-    if t == "notify_discord":
-        return "Skipped Discord notification: reprocessing pending email."
     return ""
 
 def build_notes_opener(matched_rule, dry_run):

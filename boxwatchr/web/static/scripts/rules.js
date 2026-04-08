@@ -93,16 +93,4 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
     }
-
-    // Rule search
-    var ruleSearch = document.getElementById("rule-search");
-    if (ruleSearch) {
-        ruleSearch.addEventListener("input", function() {
-            var q = this.value.toLowerCase().trim();
-            document.querySelectorAll(".rule-card").forEach(function(card) {
-                var name = card.dataset.ruleName || "";
-                card.classList.toggle("d-none", q.length > 0 && name.indexOf(q) === -1);
-            });
-        });
-    }
 });

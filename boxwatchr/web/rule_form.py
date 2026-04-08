@@ -5,65 +5,9 @@ from flask import render_template, request, redirect, url_for, abort, flash
 from boxwatchr import config, imap, spam
 from boxwatchr.database import db_connection, get_rule, insert_rule, update_rule, enqueue_email_update
 from boxwatchr.notes import action_sentence
-from boxwatchr.notifications import send_discord_notification
 from boxwatchr.rules import validate_rule, check_rule, load_rules, TERMINAL_ACTIONS
 from boxwatchr.web.app import app, _require_auth, _require_csrf, _check_csrf, logger
 from boxwatchr.web.rules import _FIELD_LABELS, _ACTION_LABELS
-
-
-_RULE_TEMPLATES = [
-    {
-        "name": "Move newsletter",
-        "match": "any",
-        "conditions": [
-            {"field": "subject", "operator": "contains", "value": "unsubscribe"},
-            {"field": "sender", "operator": "contains", "value": "newsletter"},
-        ],
-        "actions": [{"type": "move", "destination": ""}],
-    },
-    {
-        "name": "Flag high spam score",
-        "match": "all",
-        "conditions": [
-            {"field": "rspamd_score", "operator": "greater_than_or_equal", "value": "10"},
-        ],
-        "actions": [{"type": "flag"}],
-    },
-    {
-        "name": "Learn spam and move",
-        "match": "all",
-        "conditions": [
-            {"field": "rspamd_score", "operator": "greater_than_or_equal", "value": "15"},
-        ],
-        "actions": [{"type": "learn_spam"}, {"type": "move", "destination": "Junk"}],
-    },
-    {
-        "name": "Mark old email as read",
-        "match": "all",
-        "conditions": [
-            {"field": "email_age_days", "operator": "greater_than_or_equal", "value": "7"},
-        ],
-        "actions": [{"type": "mark_read"}],
-    },
-    {
-        "name": "Notify on attachment",
-        "match": "all",
-        "conditions": [
-            {"field": "attachment_name", "operator": "is_not_empty", "value": ""},
-        ],
-        "actions": [{"type": "notify_discord", "webhook_url": ""}],
-    },
-    {
-        "name": "Tag receipts",
-        "match": "any",
-        "conditions": [
-            {"field": "subject", "operator": "contains", "value": "receipt"},
-            {"field": "subject", "operator": "contains", "value": "invoice"},
-            {"field": "subject", "operator": "contains", "value": "order confirmation"},
-        ],
-        "actions": [{"type": "add_label", "label": "receipt"}],
-    },
-]
 
 
 def _parse_rule_form(form):
@@ -72,8 +16,6 @@ def _parse_rule_form(form):
     condition_values = form.getlist("condition_value")
     action_types = form.getlist("action_type")
     action_destinations = form.getlist("action_destination")
-    action_webhook_urls = form.getlist("action_webhook_url")
-    action_labels = form.getlist("action_label")
 
     conditions = []
     for field, operator, value in zip(condition_fields, condition_operators, condition_values):
@@ -82,8 +24,6 @@ def _parse_rule_form(form):
 
     actions = []
     dest_idx = 0
-    webhook_idx = 0
-    label_idx = 0
     for action_type in action_types:
         if not action_type:
             continue
@@ -91,57 +31,22 @@ def _parse_rule_form(form):
         if action_type == "move":
             action["destination"] = action_destinations[dest_idx] if dest_idx < len(action_destinations) else ""
             dest_idx += 1
-        elif action_type == "notify_discord":
-            action["webhook_url"] = action_webhook_urls[webhook_idx] if webhook_idx < len(action_webhook_urls) else ""
-            webhook_idx += 1
-        elif action_type == "add_label":
-            action["label"] = action_labels[label_idx] if label_idx < len(action_labels) else ""
-            label_idx += 1
         actions.append(action)
 
-    result = {
+    return {
         "name": form.get("name", "").strip(),
         "match": form.get("match", "all"),
         "conditions": conditions,
         "actions": actions,
     }
 
-    raw_groups = form.get("condition_groups_json", "").strip()
-    if raw_groups:
-        try:
-            groups = json.loads(raw_groups)
-            if isinstance(groups, list) and groups:
-                result["condition_groups"] = groups
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    return result
-
 
 @app.route("/rules/new", methods=["GET", "POST"])
 @_require_auth
 def rule_new():
     error = None
-    rule = {"name": "", "match": "all", "conditions": [], "actions": [], "condition_groups": []}
+    rule = {"name": "", "match": "all", "conditions": [], "actions": []}
     folders = imap.get_folder_list()
-
-    if request.method == "GET":
-        template_name = request.args.get("template", "").strip()
-        if template_name:
-            for tmpl in _RULE_TEMPLATES:
-                if tmpl["name"] == template_name:
-                    rule.update(tmpl)
-                    break
-
-        prefill_sender = request.args.get("sender", "").strip()
-        prefill_subject = request.args.get("subject", "").strip()
-        if prefill_sender or prefill_subject:
-            prefill_conditions = []
-            if prefill_sender:
-                prefill_conditions.append({"field": "sender", "operator": "equals", "value": prefill_sender})
-            if prefill_subject:
-                prefill_conditions.append({"field": "subject", "operator": "contains", "value": prefill_subject})
-            rule["conditions"] = prefill_conditions
 
     if request.method == "POST":
         _check_csrf()
@@ -157,7 +62,6 @@ def rule_new():
                     match=validated["match"],
                     conditions_json=json.dumps(validated["conditions"]),
                     actions_json=json.dumps(validated["actions"]),
-                    condition_groups_json=json.dumps(validated.get("condition_groups", [])),
                 )
                 load_rules()
                 logger.info("User created rule '%s'", validated["name"])
@@ -173,7 +77,6 @@ def rule_new():
         folders=folders,
         field_labels=_FIELD_LABELS,
         action_labels=_ACTION_LABELS,
-        templates=_RULE_TEMPLATES,
         show_logout=bool(config.WEB_PASSWORD),
     )
 
@@ -191,7 +94,6 @@ def rule_edit(rule_id):
         "match": row["match"],
         "conditions": json.loads(row["conditions"] or "[]"),
         "actions": json.loads(row["actions"] or "[]"),
-        "condition_groups": json.loads(row["condition_groups"] or "[]") if "condition_groups" in row.keys() else [],
     }
     folders = imap.get_folder_list()
 
@@ -210,7 +112,6 @@ def rule_edit(rule_id):
                     match=validated["match"],
                     conditions_json=json.dumps(validated["conditions"]),
                     actions_json=json.dumps(validated["actions"]),
-                    condition_groups_json=json.dumps(validated.get("condition_groups", [])),
                 )
                 load_rules()
                 logger.info("User updated rule '%s'", validated["name"])
@@ -226,7 +127,6 @@ def rule_edit(rule_id):
         folders=folders,
         field_labels=_FIELD_LABELS,
         action_labels=_ACTION_LABELS,
-        templates=[],
         show_logout=bool(config.WEB_PASSWORD),
     )
 
@@ -243,7 +143,6 @@ def rule_run(rule_id):
         "match": row["match"],
         "conditions": json.loads(row["conditions"] or "[]"),
         "actions": json.loads(row["actions"] or "[]"),
-        "condition_groups": json.loads(row["condition_groups"] or "[]") if "condition_groups" in row.keys() else [],
     }
     rule = validate_rule(rule_dict)
     if rule is None:
@@ -273,10 +172,8 @@ def rule_run(rule_id):
     logger.debug("Rule run: evaluating %s email(s) against rule '%s'", len(rows), rule["name"])
 
     rule_actions = rule["actions"]
-    imap_actions = [a for a in rule_actions if a["type"] != "notify_discord"]
-    discord_actions = [a for a in rule_actions if a["type"] == "notify_discord"]
-    resolved_actions = [a for a in imap_actions if a["type"] not in TERMINAL_ACTIONS] + \
-                       [a for a in imap_actions if a["type"] in TERMINAL_ACTIONS]
+    resolved_actions = [a for a in rule_actions if a["type"] not in TERMINAL_ACTIONS] + \
+                       [a for a in rule_actions if a["type"] in TERMINAL_ACTIONS]
 
     needs_rfc822 = any(a["type"] in {"learn_spam", "learn_ham"} for a in resolved_actions)
 
@@ -302,7 +199,6 @@ def rule_run(rule_id):
                     "recipients": [r for r in (email_row["recipients"] or "").split(",") if r],
                     "raw_headers": email_row["raw_headers"] or "",
                     "attachments": json.loads(email_row["attachments"] or "[]"),
-                    "date_received": email_row["date_received"] or "",
                 }
 
                 if not check_rule(rule, email_data, spam_score=email_row["spam_score"], email_id=email_id):
@@ -389,19 +285,6 @@ def rule_run(rule_id):
                     if action_type in TERMINAL_ACTIONS:
                         break
 
-                if not config.DRYRUN and discord_actions:
-                    for da in discord_actions:
-                        webhook_url = da.get("webhook_url", "") or config.DISCORD_WEBHOOK_URL
-                        if webhook_url:
-                            send_discord_notification(
-                                webhook_url,
-                                email_data,
-                                rule["name"],
-                                email_row["spam_score"],
-                                email_id,
-                                executed,
-                            )
-
                 if config.DRYRUN:
                     would_have_actioned += len(executed)
 
@@ -417,7 +300,7 @@ def rule_run(rule_id):
                         dict({"at": processed_at, "by": "boxwatchr", "action": a["type"]},
                              **{"destination": a["destination"]} if "destination" in a else {})
                         for a in executed
-                        if a["type"] not in {"learn_spam", "learn_ham", "notify_discord"}
+                        if a["type"] not in {"learn_spam", "learn_ham"}
                     ]
                 enqueue_email_update(
                     email_id,
@@ -447,55 +330,3 @@ def rule_run(rule_id):
         logger.info("Rule '%s' run manually: %s matched, %s action(s) taken", rule["name"], matched, actioned)
         flash("Rule '%s' ran: %s email(s) matched, %s action(s) taken." % (rule["name"], matched, actioned), "success")
     return redirect(url_for("rules_list"))
-
-
-@app.route("/api/rules/simulate", methods=["POST"])
-@_require_auth
-def rule_simulate():
-    from boxwatchr.web.app import _check_csrf
-    _check_csrf()
-
-    data = request.get_json(silent=True)
-    if not data:
-        return json.dumps({"error": "Invalid JSON"}), 400, {"Content-Type": "application/json"}
-
-    rule_data = data.get("rule")
-    if not rule_data:
-        return json.dumps({"error": "No rule provided"}), 400, {"Content-Type": "application/json"}
-
-    rule = validate_rule(rule_data)
-    if rule is None:
-        return json.dumps({"error": "Invalid rule"}), 400, {"Content-Type": "application/json"}
-
-    try:
-        with db_connection() as conn:
-            rows = conn.execute(
-                "SELECT id, uid, sender, subject, recipients, raw_headers, attachments, spam_score, date_received, folder"
-                " FROM emails WHERE account_id = ? ORDER BY date_received DESC LIMIT 500",
-                (config.ACCOUNT_ID,)
-            ).fetchall()
-    except sqlite3.Error as e:
-        logger.error("Rule simulate: database error: %s", e)
-        return json.dumps({"error": "Database error"}), 500, {"Content-Type": "application/json"}
-
-    matches = []
-    for row in rows:
-        email_data = {
-            "sender": row["sender"] or "",
-            "subject": row["subject"] or "",
-            "recipients": [r for r in (row["recipients"] or "").split(",") if r],
-            "raw_headers": row["raw_headers"] or "",
-            "attachments": json.loads(row["attachments"] or "[]"),
-            "date_received": row["date_received"] or "",
-        }
-        if check_rule(rule, email_data, spam_score=row["spam_score"], email_id=row["id"]):
-            matches.append({
-                "id": row["id"],
-                "sender": row["sender"],
-                "subject": row["subject"],
-                "date_received": row["date_received"],
-                "spam_score": row["spam_score"],
-                "folder": row["folder"],
-            })
-
-    return json.dumps({"matches": matches, "total": len(matches)}), 200, {"Content-Type": "application/json"}

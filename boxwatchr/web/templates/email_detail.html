@@ -2,14 +2,7 @@
 {% block title %}boxwatchr / Email Detail ({{ email.id[:8] }}){% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
-    <h1 class="h4 fw-semibold mb-0 page-title"><i class="bi bi-envelope-open-fill page-title-icon"></i>Email Detail ({{ email.id[:8] }})</h1>
-    <div class="d-flex gap-2 flex-wrap">
-        {% if email.sender %}
-        <a href="{{ url_for('rule_new', sender=email.sender) }}" class="btn btn-outline-secondary btn-sm">Create rule from sender</a>
-        {% endif %}
-    </div>
-</div>
+<h1 class="h4 fw-semibold mb-4 page-title"><i class="bi bi-envelope-open-fill page-title-icon"></i>Email Detail ({{ email.id[:8] }})</h1>
 
 <div class="card mb-4">
     <div class="card-body">
@@ -80,14 +73,7 @@
                 {% if email.rule %}
                 <tr>
                     <td class="detail-label">Rule Matched</td>
-                    <td>
-                        {% if email.rule_exists %}
-                        <a href="/rules/{{ email.rule.id }}/edit">{{ email.rule_current_name }}</a>
-                        {% else %}
-                        {{ email.rule_current_name or email.rule.name or "—" }}
-                        {% if not email.rule_exists %}<span class="text-secondary small">(deleted)</span>{% endif %}
-                        {% endif %}
-                    </td>
+                    <td>{{ email.rule.name }}</td>
                 </tr>
                 {% endif %}
             </tbody>
@@ -120,7 +106,6 @@
                         {% elif entry.action == "mark_unread" %}Marked as unread
                         {% elif entry.action == "flag" %}Flagged
                         {% elif entry.action == "unflag" %}Removed flag
-                        {% elif entry.action == "add_label" %}Added label {{ entry.label or "" }}
                         {% else %}{{ entry.action }}{% endif %}
                     </td>
                 </tr>
@@ -128,73 +113,6 @@
             </tbody>
         </table>
         </div>
-    </div>
-</div>
-{% endif %}
-
-<div class="card mb-4" id="manual-actions-card">
-    <div class="card-body">
-        <h2 class="card-subtitle">Manual Actions</h2>
-        <div id="action-result" class="alert py-2 px-3 small d-none mb-3"></div>
-        <div class="d-flex flex-wrap gap-2">
-            <button class="btn btn-outline-secondary btn-sm" data-email-action="mark_read">Mark as read</button>
-            <button class="btn btn-outline-secondary btn-sm" data-email-action="mark_unread">Mark as unread</button>
-            <button class="btn btn-outline-secondary btn-sm" data-email-action="flag">Flag</button>
-            <button class="btn btn-outline-secondary btn-sm" data-email-action="unflag">Unflag</button>
-            <button class="btn btn-outline-secondary btn-sm" data-email-action="learn_spam">Learn as spam</button>
-            <button class="btn btn-outline-secondary btn-sm" data-email-action="learn_ham">Learn as ham</button>
-        </div>
-        {% if folders %}
-        <div class="d-flex gap-2 mt-2 align-items-center flex-wrap">
-            <select class="form-select form-select-sm" id="move-dest" style="max-width:260px">
-                <option value="">— Select folder —</option>
-                {% for f in folders %}
-                <option value="{{ f }}">{{ f }}</option>
-                {% endfor %}
-            </select>
-            <button class="btn btn-outline-secondary btn-sm" data-email-action="move">Move to folder</button>
-        </div>
-        <div class="d-flex gap-2 mt-2 align-items-center flex-wrap">
-            <input type="text" class="form-control form-control-sm" id="label-value" placeholder="Label name" style="max-width:200px">
-            <button class="btn btn-outline-secondary btn-sm" data-email-action="add_label">Add label</button>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-{% if email.rspamd_symbols %}
-<div class="card mb-4">
-    <div class="card-body">
-        <h2 class="card-subtitle">rspamd Symbols</h2>
-        <div class="table-responsive">
-        <table class="table table-sm mb-0">
-            <thead>
-                <tr>
-                    <th>Symbol</th>
-                    <th>Score</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for sym in email.rspamd_symbols %}
-                <tr>
-                    <td><code>{{ sym.name }}</code></td>
-                    <td class="{% if sym.score > 0 %}text-danger{% elif sym.score < 0 %}text-success{% endif %}">{{ "%.2f"|format(sym.score) }}</td>
-                    <td class="small text-secondary">{{ sym.description or "—" }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-{% if email.body_text %}
-<div class="card mb-4">
-    <div class="card-body">
-        <h2 class="card-subtitle">Body Preview</h2>
-        <pre class="mb-0 small text-secondary" style="white-space:pre-wrap;word-break:break-word;">{{ email.body_text }}</pre>
     </div>
 </div>
 {% endif %}
@@ -267,4 +185,3 @@
 {% endif %}
 
 {% endblock %}
-{% block scripts %}<script>var EMAIL_ID = "{{ email.id }}";</script><script src="{{ url_for('static', filename='scripts/email_detail.js') }}"></script>{% endblock %}
