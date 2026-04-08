@@ -7,6 +7,7 @@ import threading
 import collections
 import requests
 from imapclient import IMAPClient
+from imapclient.exceptions import IMAPClientError, IMAPClientAbortError
 from boxwatchr import config
 from boxwatchr.database import flush as flush_db, initialize as db_initialize, start_flusher as db_start_flusher, verify as db_verify, DB_PATH as _db_path
 from boxwatchr import imap as _imap
@@ -86,7 +87,14 @@ def _check_imap():
         client.logout()
         logger.debug("IMAP health check: OK")
         return _CheckResult(True, "", False)
-    except Exception:
+    except (IMAPClientAbortError, OSError) as e:
+        try:
+            client.logout()
+        except Exception:
+            pass
+        logger.debug("IMAP health check: connection error during folder select: %s", e)
+        return _CheckResult(False, str(e), False)
+    except IMAPClientError:
         reason = "folder %r does not exist on the server" % config.IMAP_FOLDER
         try:
             folders = client.list_folders()
