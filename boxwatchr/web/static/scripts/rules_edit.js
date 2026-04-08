@@ -1,4 +1,5 @@
-var TEXT_OPERATORS_HTML = '<option value="equals">equals</option><option value="not_equals">does not equal</option><option value="contains">contains</option><option value="not_contains">does not contain</option><option value="is_empty">is empty</option>';
+var NUMERIC_FIELDS = ["rspamd_score", "email_age_days", "email_age_hours"];
+var TEXT_OPERATORS_HTML = '<option value="equals">equals</option><option value="not_equals">does not equal</option><option value="contains">contains</option><option value="not_contains">does not contain</option><option value="matches_regex">matches regex</option><option value="is_empty">is empty</option>';
 var NUMERIC_OPERATORS_HTML = '<option value="greater_than">greater than</option><option value="less_than">less than</option><option value="greater_than_or_equal">greater than or equal</option><option value="less_than_or_equal">less than or equal</option>';
 
 function onFieldChange(select) {
@@ -6,7 +7,7 @@ function onFieldChange(select) {
     var operatorSelect = row.querySelector(".cond-operator");
     var textInput = row.querySelector(".value-text");
     var boolSelect = row.querySelector(".value-bool");
-    var isNumeric = select.value === "rspamd_score";
+    var isNumeric = NUMERIC_FIELDS.indexOf(select.value) !== -1;
 
     operatorSelect.innerHTML = isNumeric ? NUMERIC_OPERATORS_HTML : TEXT_OPERATORS_HTML;
 
@@ -34,9 +35,26 @@ function onOperatorChange(select) {
 function onActionTypeChange(select) {
     var row = select.closest(".action-row");
     var destInput = row.querySelector(".action-dest");
-    var isMove = select.value === "move";
-    destInput.classList.toggle("d-none", !isMove);
-    destInput.disabled = !isMove;
+    var webhookInput = row.querySelector(".action-webhook");
+    var labelInput = row.querySelector(".action-label");
+    var val = select.value;
+
+    var isMove = val === "move";
+    var isDiscord = val === "notify_discord";
+    var isLabel = val === "add_label";
+
+    if (destInput) {
+        destInput.classList.toggle("d-none", !isMove);
+        destInput.disabled = !isMove;
+    }
+    if (webhookInput) {
+        webhookInput.classList.toggle("d-none", !isDiscord);
+        webhookInput.disabled = !isDiscord;
+    }
+    if (labelInput) {
+        labelInput.classList.toggle("d-none", !isLabel);
+        labelInput.disabled = !isLabel;
+    }
 }
 
 function removeCondition(btn) {
