@@ -1,4 +1,4 @@
-FROM debian:trixie-slim
+FROM debian:bookworm-slim
 
 # Install system dependencies, the rspamd repository, rspamd itself,
 # Python, pip, and supervisord all in one layer to keep the image small.
