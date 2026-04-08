@@ -73,6 +73,12 @@
 {% endfor %}
 {% endwith %}
 
+{% if rules %}
+<div class="mb-3">
+    <input type="search" id="rule-search" class="form-control form-control-sm" placeholder="Search rules by name...">
+</div>
+{% endif %}
+
 {% if not rules %}
 <div class="card">
     <div class="card-body text-center py-5">
@@ -83,14 +89,20 @@
 {% endif %}
 
 {% for rule in rules %}
-<div class="card mb-3">
+<div class="card mb-3 rule-card{% if not rule.enabled %} rule-disabled{% endif %}" data-rule-name="{{ rule.name | lower }}">
     <div class="card-body">
         <div class="d-flex align-items-start justify-content-between gap-3 mb-3 flex-wrap">
             <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="fw-semibold">{{ rule.name or "(unnamed)" }}</span>
+                <span class="fw-semibold{% if not rule.enabled %} text-secondary{% endif %}">{{ rule.name or "(unnamed)" }}</span>
                 <span class="badge text-bg-secondary">match {{ rule.match or "all" }}</span>
+                {% if not rule.enabled %}
+                <span class="badge text-bg-secondary">disabled</span>
+                {% endif %}
+                {% if rule.hit_count %}
+                <span class="text-secondary small">{{ rule.hit_count }} hit{% if rule.hit_count != 1 %}s{% endif %}{% if rule.last_triggered %}, last {{ rule.last_triggered[:10] }}{% endif %}</span>
+                {% endif %}
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
                 <form method="post" action="/rules/{{ rule.id }}/move-up">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-secondary btn-sm" {{ 'disabled' if loop.first }}>&#8593;</button>
@@ -99,7 +111,15 @@
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-secondary btn-sm" {{ 'disabled' if loop.last }}>&#8595;</button>
                 </form>
+                <form method="post" action="/rules/{{ rule.id }}/toggle">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm">{{ "Enable" if not rule.enabled else "Disable" }}</button>
+                </form>
                 <a href="/rules/{{ rule.id }}/edit" class="btn btn-outline-secondary btn-sm">Edit</a>
+                <form method="post" action="/rules/{{ rule.id }}/duplicate">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm">Duplicate</button>
+                </form>
                 <form method="post" action="/rules/{{ rule.id }}/run" data-rule-name="{{ rule.name }}">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-primary btn-sm">Run Rule</button>
@@ -122,6 +142,7 @@
                         "not_equals": "does not equal",
                         "contains": "contains",
                         "not_contains": "does not contain",
+                        "matches_regex": "matches regex",
                         "is_empty": "is empty",
                         "greater_than": ">",
                         "less_than": "<",
@@ -153,6 +174,9 @@
                         {{ action_labels.get(a.type, a.type) }}
                         {% if a.type == "move" and a.destination %}
                         <code>{{ a.destination }}</code>
+                        {% endif %}
+                        {% if a.type == "add_label" and a.label %}
+                        <code>{{ a.label }}</code>
                         {% endif %}
                     </li>
                     {% endfor %}

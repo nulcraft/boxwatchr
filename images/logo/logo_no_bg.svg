@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1400 1600">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #909caf;
+      }
+
+      .cls-2 {
+        fill: url(#linear-gradient-2);
+      }
+
+      .cls-3 {
+        fill: url(#linear-gradient-3);
+      }
+
+      .cls-4 {
+        fill: #c0c6ce;
+      }
+
+      .cls-5 {
+        fill: #6f87a3;
+      }
+
+      .cls-6 {
+        fill: url(#linear-gradient);
+      }
+    </style>
+    <linearGradient id="linear-gradient" x1="0" y1="533.33" x2="170.24" y2="533.33" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6d7689"/>
+      <stop offset=".42" stop-color="#6b7487"/>
+      <stop offset=".57" stop-color="#666e80"/>
+      <stop offset=".68" stop-color="#5c6474"/>
+      <stop offset=".77" stop-color="#4f5563"/>
+      <stop offset=".85" stop-color="#3d424d"/>
+      <stop offset=".91" stop-color="#282b32"/>
+      <stop offset=".97" stop-color="#0f1012"/>
+      <stop offset="1" stop-color="#000"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="1182" y1="533.33" x2="1352.24" y2="533.33" gradientTransform="translate(2582) rotate(-180) scale(1 -1)" xlink:href="#linear-gradient"/>
+    <linearGradient id="linear-gradient-3" x1="110.5" y1="-751.78" x2="278.16" y2="-751.78" gradientTransform="translate(-51.78 -110.5) rotate(90)" xlink:href="#linear-gradient"/>
+  </defs>
+  <g id="_318" data-name="318">
+    <g>
+      <rect class="cls-4" x="170.24" y="167.66" width="1059.52" height="1432.34"/>
+      <g>
+        <polygon class="cls-1" points="0 533.33 700 1066.67 0 1600 0 533.33"/>
+        <polygon class="cls-1" points="1400 1600 700 1066.67 1400 533.33 1400 1600"/>
+        <polygon class="cls-5" points="0 1600 700 1066.67 1400 1600 0 1600"/>
+      </g>
+      <g>
+        <polygon class="cls-6" points="170.24 403.63 0 533.33 170.24 663.04 170.24 403.63"/>
+        <polygon class="cls-2" points="1229.76 403.63 1400 533.33 1229.76 663.04 1229.76 403.63"/>
+        <polygon class="cls-3" points="920.06 167.66 700 0 479.94 167.66 920.06 167.66"/>
+      </g>
+      <path d="M479.94,710.93l282.93-170.65v-4.49l-282.93-170.66v-172.9l440.12,280.69v130.24l-440.12,280.68v-172.9Z"/>
+    </g>
+  </g>
+</svg>
