@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Training page at `/training` for bulk rspamd Bayes learning from any IMAP folder, with a live progress bar and per-message results table. (#67)
 
 ### Changed
+- Replaced project logo with new design; updated favicon, navbar icon, and login page icon.
 - Base font sizes increased by 1px (xs: 11→12, sm: 12→13, base: 13→14). (#66)
 - Rule action buttons now wrap on narrow screens. (#66)
 
