@@ -4,9 +4,9 @@
 
 :root {
     /* Typography */
-    --fz-xs:   11px;
-    --fz-sm:   12px;
-    --fz-base: 13px;
+    --fz-xs:   12px;
+    --fz-sm:   13px;
+    --fz-base: 14px;
 
     /* Primary (blue) */
     --c-primary-text:          #cfe2ff;
@@ -124,6 +124,7 @@
 
 .site-nav-icon {
     font-size: 0.8em;
+    line-height: 1;
     flex-shrink: 0;
 }
 
@@ -612,6 +613,15 @@ pre {
 
     .action-forms form,
     .action-forms .btn {
+        width: 100%;
+    }
+
+    .rules-header-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .rules-header-actions .btn {
         width: 100%;
     }
 }
