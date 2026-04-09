@@ -596,6 +596,26 @@ pre {
 }
 
 /* ============================================================
+   Training page
+   ============================================================ */
+
+.training-progress-bar {
+    height: 8px;
+}
+
+.training-col-result {
+    white-space: nowrap;
+    width: 1%;
+}
+
+.training-col-subject {
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ============================================================
    Responsive (max-width: 767.98px)
    ============================================================ */
 

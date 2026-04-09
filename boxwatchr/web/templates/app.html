@@ -30,6 +30,7 @@
                     <a href="/emails" class="nav-link site-nav-link{% if request.path.startswith('/emails') %} active{% endif %}"><i class="bi bi-envelope-fill site-nav-icon"></i>emails</a>
                     <a href="/rules" class="nav-link site-nav-link{% if request.path.startswith('/rules') %} active{% endif %}"><i class="bi bi-funnel-fill site-nav-icon"></i>rules</a>
                     <a href="/logs" class="nav-link site-nav-link{% if request.path == '/logs' %} active{% endif %}"><i class="bi bi-file-text-fill site-nav-icon"></i>logs</a>
+                    <a href="/training" class="nav-link site-nav-link{% if request.path == '/training' %} active{% endif %}"><i class="bi bi-mortarboard-fill site-nav-icon"></i>training</a>
                     <a href="/config" class="nav-link site-nav-link{% if request.path == '/config' %} active{% endif %}"><i class="bi bi-gear-fill site-nav-icon"></i>config</a>
                     {% if show_logout %}
                     <form method="post" action="/logout" class="ms-md-auto">

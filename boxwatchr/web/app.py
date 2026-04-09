@@ -219,6 +219,7 @@ def start_dashboard():
     import boxwatchr.web.logs
     import boxwatchr.web.rules
     import boxwatchr.web.rule_form
+    import boxwatchr.web.training
     import boxwatchr.web.version
     t = threading.Thread(target=_run_server, daemon=True, name="web-server")
     t.start()

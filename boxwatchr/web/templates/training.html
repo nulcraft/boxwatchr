@@ -1,0 +1,76 @@
+{% extends "app.html" %}
+{% block title %}boxwatchr / Training{% endblock %}
+
+{% block content %}
+<h1 class="h4 fw-semibold mb-4 page-title"><i class="bi bi-mortarboard-fill page-title-icon"></i>Training</h1>
+
+<div class="card mb-4" id="training-form-card">
+    <div class="card-body">
+        <h2 class="card-subtitle">Bayes Training</h2>
+        <p class="text-secondary small mb-3">Select a folder and a training type, then submit. All messages in the folder will be submitted to rspamd for Bayes learning.</p>
+        <form id="training-form">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-5">
+                    <label class="form-label">Folder</label>
+                    <select name="folder" id="training-folder" class="form-select">
+                        {% if folders %}
+                            {% for f in folders %}
+                            <option value="{{ f }}">{{ f }}</option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="" disabled selected>No folders available</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label">Train As</label>
+                    <select name="learn_type" id="training-type" class="form-select">
+                        <option value="spam">Spam</option>
+                        <option value="ham">Ham (not spam)</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-2">
+                    <button type="submit" id="training-submit" class="btn btn-primary w-100"{% if not folders %} disabled{% endif %}>Submit Training</button>
+                </div>
+            </div>
+            <div id="training-error" class="text-danger small mt-2" style="display:none;"></div>
+        </form>
+    </div>
+</div>
+
+<div id="training-progress-section" style="display:none;">
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span id="training-progress-label" class="small text-secondary">Preparing...</span>
+                <span id="training-progress-count" class="small text-secondary"></span>
+            </div>
+            <div class="progress training-progress-bar mb-0">
+                <div id="training-progress-fill" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h2 class="card-subtitle">Results</h2>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Subject</th>
+                            <th class="col-date">Date</th>
+                            <th class="training-col-result">Result</th>
+                        </tr>
+                    </thead>
+                    <tbody id="training-results-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='scripts/training.js') }}"></script>{% endblock %}
