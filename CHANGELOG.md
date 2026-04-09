@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Base font sizes increased by 1px (xs: 11→12, sm: 12→13, base: 13→14).
+- Rule action buttons now wrap on narrow screens.
+
+### Fixed
+- Nav bar icons now align vertically with their text labels.
+
 ## [1.0.16] - 2026-04-08
 
 ### Fixed
