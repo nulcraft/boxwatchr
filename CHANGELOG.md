@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-09
+
 ### Added
 - Fuzzy search input on the Rules page filters rule cards as you type, using substring, subsequence, and Levenshtein matching. (#65)
 - Rule templates on the new rule form: Move newsletter, Learn spam, Learn ham. (#65)
