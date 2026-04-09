@@ -8,6 +8,8 @@
 
 ## Changed
 
+- Replaced project logo with new design; updated favicon, navbar icon, and login page icon.
+
 - Base font sizes increased by 1px (xs: 11→12, sm: 12→13, base: 13→14).
 
 - Rule action buttons now wrap on narrow screens.
