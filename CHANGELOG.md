@@ -8,14 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Training page at `/training` for bulk rspamd Bayes learning from any IMAP folder, with a live progress bar and per-message results table.
+- Fuzzy search input on the Rules page filters rule cards as you type, using substring, subsequence, and Levenshtein matching. (#65)
+- Rule templates on the new rule form: Move newsletter, Learn spam, Learn ham. (#65)
+- Training page at `/training` for bulk rspamd Bayes learning from any IMAP folder, with a live progress bar and per-message results table. (#67)
 
 ### Changed
-- Base font sizes increased by 1px (xs: 11→12, sm: 12→13, base: 13→14).
-- Rule action buttons now wrap on narrow screens.
+- Base font sizes increased by 1px (xs: 11→12, sm: 12→13, base: 13→14). (#66)
+- Rule action buttons now wrap on narrow screens. (#66)
 
 ### Fixed
-- Nav bar icons now align vertically with their text labels.
+- Nav bar icons now align vertically with their text labels. (#66)
 
 ## [1.0.16] - 2026-04-08
 
