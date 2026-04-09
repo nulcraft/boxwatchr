@@ -2,9 +2,9 @@
 {% block title %}boxwatchr / Rules{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-4">
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
     <h1 class="h4 fw-semibold mb-0 page-title"><i class="bi bi-funnel-fill page-title-icon"></i>Rules</h1>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap rules-header-actions">
         <button type="button" class="btn btn-outline-secondary btn-sm" id="import-btn">Import</button>
         <button type="button" class="btn btn-outline-secondary btn-sm" id="export-btn">Export</button>
         <a href="/rules/new" class="btn btn-primary btn-sm">Add Rule</a>
@@ -82,15 +82,21 @@
 </div>
 {% endif %}
 
+{% if rules %}
+<div class="mb-4">
+    <input type="text" class="form-control form-control-sm" id="rules-search" placeholder="Search rules..." autocomplete="off">
+</div>
+{% endif %}
+
 {% for rule in rules %}
-<div class="card mb-3">
+<div class="card mb-3" data-rule-name="{{ rule.name or '' }}">
     <div class="card-body">
         <div class="d-flex align-items-start justify-content-between gap-3 mb-3 flex-wrap">
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <span class="fw-semibold">{{ rule.name or "(unnamed)" }}</span>
                 <span class="badge text-bg-secondary">match {{ rule.match or "all" }}</span>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
                 <form method="post" action="/rules/{{ rule.id }}/move-up">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-secondary btn-sm" {{ 'disabled' if loop.first }}>&#8593;</button>
@@ -165,6 +171,12 @@
     </div>
 </div>
 {% endfor %}
+
+<div class="card d-none" id="rules-no-results">
+    <div class="card-body text-center py-4">
+        <p class="text-secondary mb-0">No rules match your search.</p>
+    </div>
+</div>
 
 <div class="overlay d-none" id="run-progress-overlay">
     <div class="card overlay-box text-center">

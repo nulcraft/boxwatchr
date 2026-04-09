@@ -8,6 +8,19 @@
 <div class="alert alert-danger py-2 px-3 small mb-4">{{ error }}</div>
 {% endif %}
 
+{% if templates %}
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="card-subtitle">Start from a template</h2>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+            {% for tmpl in templates %}
+            <a href="{{ url_for('rule_new', template=tmpl.name) }}" class="btn btn-outline-secondary btn-sm">{{ tmpl.name }}</a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <form method="post" action="{{ form_action }}">
 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 

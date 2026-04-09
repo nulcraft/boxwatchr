@@ -1,3 +1,44 @@
+function _levenshtein(a, b) {
+    var m = a.length, n = b.length;
+    var prev = [], curr = [];
+    for (var j = 0; j <= n; j++) prev[j] = j;
+    for (var i = 1; i <= m; i++) {
+        curr[0] = i;
+        for (var j = 1; j <= n; j++) {
+            curr[j] = a[i - 1] === b[j - 1]
+                ? prev[j - 1]
+                : 1 + Math.min(prev[j], curr[j - 1], prev[j - 1]);
+        }
+        var tmp = prev; prev = curr; curr = tmp;
+    }
+    return prev[n];
+}
+
+function _fuzzyMatch(query, target) {
+    query = query.toLowerCase();
+    target = target.toLowerCase();
+
+    if (target.includes(query)) return true;
+
+    // Subsequence: all query chars appear in order in target
+    var qi = 0;
+    for (var ti = 0; ti < target.length && qi < query.length; ti++) {
+        if (target[ti] === query[qi]) qi++;
+    }
+    if (qi === query.length) return true;
+
+    // Per-word Levenshtein for typo tolerance (queries of 4+ chars only)
+    if (query.length >= 4) {
+        var threshold = Math.floor(query.length / 4);
+        var words = target.split(/[\s_\-]+/);
+        for (var i = 0; i < words.length; i++) {
+            if (_levenshtein(query, words[i]) <= threshold) return true;
+        }
+    }
+
+    return false;
+}
+
 document.addEventListener("DOMContentLoaded", function() {
     // Export overlay
     var exportBtn = document.getElementById("export-btn");
@@ -90,6 +131,29 @@ document.addEventListener("DOMContentLoaded", function() {
                 runOverlay.classList.add("d-none");
                 runProgressOverlay.classList.remove("d-none");
                 pendingRunForm.submit();
+            }
+        });
+    }
+
+    // Rule search
+    var rulesSearch = document.getElementById("rules-search");
+    var rulesNoResults = document.getElementById("rules-no-results");
+
+    if (rulesSearch) {
+        rulesSearch.addEventListener("input", function() {
+            var query = this.value.trim();
+            var cards = document.querySelectorAll(".card[data-rule-name]");
+            var visible = 0;
+
+            cards.forEach(function(card) {
+                var name = card.dataset.ruleName;
+                var show = query === "" || _fuzzyMatch(query, name);
+                card.style.display = show ? "" : "none";
+                if (show) visible++;
+            });
+
+            if (rulesNoResults) {
+                rulesNoResults.classList.toggle("d-none", query === "" || visible > 0);
             }
         });
     }

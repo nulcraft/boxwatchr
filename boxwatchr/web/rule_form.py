@@ -10,6 +10,38 @@ from boxwatchr.web.app import app, _require_auth, _require_csrf, _check_csrf, lo
 from boxwatchr.web.rules import _FIELD_LABELS, _ACTION_LABELS
 
 
+_RULE_TEMPLATES = [
+    {
+        "name": "Move newsletter",
+        "match": "all",
+        "conditions": [
+            {"field": "raw_headers", "operator": "contains", "value": "List-Unsubscribe"},
+        ],
+        "actions": [{"type": "move", "destination": ""}],
+    },
+    {
+        "name": "Learn spam",
+        "match": "all",
+        "conditions": [
+            {"field": "rspamd_score", "operator": "greater_than_or_equal", "value": "10"},
+        ],
+        "actions": [
+            {"type": "learn_spam"},
+            {"type": "mark_read"},
+            {"type": "move", "destination": ""},
+        ],
+    },
+    {
+        "name": "Learn ham",
+        "match": "all",
+        "conditions": [
+            {"field": "rspamd_score", "operator": "less_than_or_equal", "value": "2"},
+        ],
+        "actions": [{"type": "learn_ham"}],
+    },
+]
+
+
 def _parse_rule_form(form):
     condition_fields = form.getlist("condition_field")
     condition_operators = form.getlist("condition_operator")
@@ -48,6 +80,14 @@ def rule_new():
     rule = {"name": "", "match": "all", "conditions": [], "actions": []}
     folders = imap.get_folder_list()
 
+    if request.method == "GET":
+        template_name = request.args.get("template", "").strip()
+        if template_name:
+            for tmpl in _RULE_TEMPLATES:
+                if tmpl["name"] == template_name:
+                    rule.update(tmpl)
+                    break
+
     if request.method == "POST":
         _check_csrf()
         rule = _parse_rule_form(request.form)
@@ -77,6 +117,7 @@ def rule_new():
         folders=folders,
         field_labels=_FIELD_LABELS,
         action_labels=_ACTION_LABELS,
+        templates=_RULE_TEMPLATES,
         show_logout=bool(config.WEB_PASSWORD),
     )
 
