@@ -17,7 +17,7 @@
         <div class="card h-100">
             <div class="card-body">
                 <h2 class="card-subtitle">Trained: Spam</h2>
-                <div class="stat-value score-high">{{ stats.spam_caught }}</div>
+                <div class="stat-value score-high">{{ stats.spam_trained if stats.spam_trained is not none else 0 }}</div>
             </div>
         </div>
     </div>
@@ -25,7 +25,7 @@
         <div class="card h-100">
             <div class="card-body">
                 <h2 class="card-subtitle">Trained: Ham</h2>
-                <div class="stat-value score-low">{{ stats.ham_learned }}</div>
+                <div class="stat-value score-low">{{ stats.ham_trained if stats.ham_trained is not none else 0 }}</div>
             </div>
         </div>
     </div>
