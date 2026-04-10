@@ -203,7 +203,8 @@ def _run_server():
     logging.getLogger("flask").setLevel(logging.ERROR)
     logging.getLogger("flask").propagate = False
     from werkzeug.serving import make_server
-    server = make_server("0.0.0.0", 80, app, threaded=True)
+    port = int(os.environ.get("WEB_PORT", 8143))
+    server = make_server("0.0.0.0", port, app, threaded=True)
     server.serve_forever()
 
 def start_dashboard():
@@ -221,6 +222,7 @@ def start_dashboard():
     import boxwatchr.web.rule_form
     import boxwatchr.web.training
     import boxwatchr.web.version
+    port = int(os.environ.get("WEB_PORT", 8143))
     t = threading.Thread(target=_run_server, daemon=True, name="web-server")
     t.start()
-    logger.debug("Web server started on port 80")
+    logger.debug("Web server started on port %d", port)

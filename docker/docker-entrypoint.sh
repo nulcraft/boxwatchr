@@ -3,7 +3,8 @@ set -e
 
 PUID=${PUID:-1000}
 PGID=${PGID:-1000}
-export PUID PGID
+WEB_PORT=${WEB_PORT:-8143}
+export PUID PGID WEB_PORT
 
 case "$PUID" in
     *[!0-9]*) echo "ERROR: PUID must be a number, got '$PUID'."; exit 1 ;;

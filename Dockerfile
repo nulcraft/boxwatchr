@@ -58,8 +58,9 @@ COPY VERSION .
 # without rebuilding the container.
 
 # Expose the rspamd web UI port and the boxwatchr web dashboard port.
+# WEB_PORT defaults to 8143 and can be overridden at runtime.
 EXPOSE 11334
-EXPOSE 8080
+EXPOSE 8143
 
 # Run the startup script which configures rspamd and launches supervisord.
 CMD ["/docker-entrypoint.sh"]
