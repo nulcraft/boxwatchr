@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- rspamd no longer logs a warning about missing `stats.ucl` on every container restart. The entrypoint now pre-creates the file before supervisord starts. (#83)
+
 ### Changed
 - Dashboard Trained: Spam and Trained: Ham stats now show live Bayes classifier revision counts from the rspamd `/stat` endpoint instead of counting rows in the emails table. (#81)
 
