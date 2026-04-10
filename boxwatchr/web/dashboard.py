@@ -1,22 +1,34 @@
 import sqlite3
+import requests
 from flask import render_template
 from boxwatchr import config
 from boxwatchr.database import db_connection
 from boxwatchr.web.app import app, _require_auth, logger
+
+def _get_rspamd_training_counts():
+    try:
+        url = "http://%s:%s/stat" % (config.RSPAMD_HOST, config.RSPAMD_CONTROLLER_PORT)
+        response = requests.get(url, timeout=3)
+        if response.status_code != 200:
+            return None, None
+        data = response.json()
+        spam_rev = None
+        ham_rev = None
+        for entry in data.get("statfiles", []):
+            if entry.get("class") == "spam":
+                spam_rev = entry.get("revision", 0)
+            elif entry.get("class") == "ham":
+                ham_rev = entry.get("revision", 0)
+        return spam_rev, ham_rev
+    except requests.exceptions.RequestException as e:
+        logger.error("Failed to fetch rspamd stat: %s", e)
+        return None, None
 
 def _get_stats():
     try:
         with db_connection() as conn:
             total = conn.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
             pending = conn.execute("SELECT COUNT(*) FROM emails WHERE processed = 0").fetchone()[0]
-
-            spam_caught = conn.execute(
-                "SELECT COUNT(*) FROM emails WHERE rspamd_learned = 'spam'"
-            ).fetchone()[0]
-
-            ham_learned = conn.execute(
-                "SELECT COUNT(*) FROM emails WHERE rspamd_learned = 'ham'"
-            ).fetchone()[0]
 
             rule_rows = conn.execute(
                 "SELECT JSON_EXTRACT(rule_matched, '$.name') AS rule_name, COUNT(*) AS cnt"
@@ -46,11 +58,13 @@ def _get_stats():
                 else:
                     buckets["15+"] += 1
 
+            spam_trained, ham_trained = _get_rspamd_training_counts()
+
             return {
                 "total": total,
                 "pending": pending,
-                "spam_caught": spam_caught,
-                "ham_learned": ham_learned,
+                "spam_trained": spam_trained,
+                "ham_trained": ham_trained,
                 "rule_counts": rule_counts,
                 "score_buckets": buckets,
             }
