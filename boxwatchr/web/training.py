@@ -109,9 +109,12 @@ def _run_training(job_id, folder, learn_type):
         data["type"] = event_type
         q.put(json.dumps(data))
 
+    logger.info("Bayes training started: folder=%r learn_type=%s", folder, learn_type)
+
     try:
         client = connect()
     except Exception as e:
+        logger.error("Bayes training IMAP connection failed: %s", e)
         emit("error", message="IMAP connection failed: %s" % e)
         job["done"].set()
         return
@@ -120,6 +123,7 @@ def _run_training(job_id, folder, learn_type):
         client.select_folder(folder, readonly=True)
         uids = client.search(["ALL"])
         total = len(uids)
+        logger.info("Bayes training: %d message(s) found in %r", total, folder)
         emit("start", total=total)
 
         trained = 0
@@ -174,9 +178,10 @@ def _run_training(job_id, folder, learn_type):
                 )
 
         emit("done", trained=trained, skipped=skipped, failed=failed)
+        logger.info("Bayes training complete: trained=%d skipped=%d failed=%d folder=%r", trained, skipped, failed, folder)
 
     except Exception as e:
-        logger.error("Training job %s failed: %s", job_id, e)
+        logger.error("Bayes training failed for %r: %s", folder, e)
         emit("error", message=str(e))
     finally:
         try:
