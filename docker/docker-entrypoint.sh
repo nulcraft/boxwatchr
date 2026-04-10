@@ -78,4 +78,7 @@ EOF
 SUPERVISOR_PASSWORD=$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)
 export SUPERVISOR_PASSWORD
 
+mkdir -p /var/lib/rspamd
+touch /var/lib/rspamd/stats.ucl
+
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
