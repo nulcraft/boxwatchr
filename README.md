@@ -6,30 +6,30 @@ A self-hosted email filtering daemon that watches your IMAP mailbox, scores ever
 
 ---
 
-## What does it actually do?
+## What it does
 
 boxwatchr connects to your email account over IMAP, watches your inbox in real-time, and for every new message it:
 
-1. Scores the email with **rspamd** (a spam analysis engine) and gets back a numeric spam score.
-2. Runs the email through your **custom rules** in order. If a rule matches, it wins.
-3. **Takes action.** Move it to a folder, mark it read, flag it, submit it to spam training, whatever you told it to do.
-4. Logs everything to a **SQLite database** and shows you a dashboard of everything that happened.
+1. Scores the email with rspamd and gets back a numeric spam score
+2. Runs the email through your custom rules in order, and the first rule that matches wins
+3. Takes action: move it, mark it read, flag it, submit it for spam training, whatever you told it to do
+4. Logs everything to a SQLite database and shows you a dashboard of what happened
 
-Think of it like email filters on steroids, with a spam engine backing up every decision, and a dashboard so you can see exactly what happened to every message.
+Think of it like email filters, but with a spam engine backing up every decision and a full history of everything that happened to every message.
 
 ---
 
 ## Features
 
-- Real-time inbox monitoring via IMAP IDLE (or polling fallback)
-- Spam scoring with rspamd, a production-grade spam analysis engine
-- Bayesian spam learning that gets smarter every time you mark something as spam or ham
-- Flexible rule engine with tons of conditions: sender, subject, domain, attachment type, spam score, and more
-- Dashboard with stats, spam score histograms, and rule match counts
-- Full email log so you can see every message that came through and what happened to it
-- Dry run mode so you can see what boxwatchr would do before you commit to letting it run for real
-- Rule changes made in the dashboard take effect immediately, no restart needed.
-- Completely self-hosted. Nothing leaves your server.
+- Real-time inbox monitoring via IMAP IDLE, with polling fallback if your server doesn't support it
+- Spam scoring with rspamd, including DNS blocklists and Bayesian learning
+- Bayesian spam training that gets smarter the more you use it
+- Rule engine with conditions on sender, subject, domain, attachments, spam score, and more
+- Dashboard with stats, spam score histogram, and rule match counts
+- Full email log with per-message action history
+- Dry run mode so you can see what boxwatchr would do before letting it act for real
+- Rule changes take effect immediately without a restart
+- Completely self-hosted, nothing leaves your server
 
 ---
 
@@ -41,17 +41,16 @@ Think of it like email filters on steroids, with a spam engine backing up every 
 
 <a href="images/screenshots/11-config.png"><img src="images/screenshots/11-config.png" width="100%"></a>
 
-[More screenshots here...](/images/screenshots/)
+[More screenshots...](/images/screenshots/)
 
 ---
 
 ## What you need
 
-- **Docker** and **Docker Compose** installed on your server
-- An email account that supports IMAP (Gmail, Fastmail, your own mail server, pretty much anything)
-- A few minutes to set it up
+- Docker and Docker Compose installed on your server
+- An email account that supports IMAP (Fastmail, Purelymail, Mailbox.org, your own mail server, pretty much anything)
 
-That's it. You don't need to install Python, Redis, rspamd, or anything else. The Docker image includes everything.
+That's it. Python, Redis, rspamd, and the DNS resolver are all bundled in the image. You don't need to install anything else.
 
 ---
 
@@ -69,17 +68,17 @@ mkdir -p boxwatchr/config boxwatchr/data
 docker run -d \
   --name boxwatchr \
   --restart on-failure \
-  -p 8143:80 \
+  -p 8143:8143 \
   -p 11334:11334 \
   -v /path/to/config:/app/config \
   -v /path/to/data:/app/data \
   -e PUID=1000 \
   -e PGID=1000 \
   -e TZ=America/New_York \
-  nulcraft/boxwatchr:latest
+  ghcr.io/nulcraft/boxwatchr:latest
 ```
 
-Replace `/path/to/config` and `/path/to/data` with the actual absolute paths on your server. Docker run does not support relative paths. The `-e` flags are optional. Skip them to use the defaults (PUID/PGID 1000, UTC timezone, random rspamd password).
+Replace `/path/to/config` and `/path/to/data` with absolute paths on your server. Docker run does not support relative paths. The `-e` flags are optional; skip them to use the defaults. If you prefer to use an env file instead of individual `-e` flags, add `--env-file /path/to/config/.env` before the image name.
 
 ### Option 2: Docker Compose
 
@@ -88,11 +87,11 @@ Create `docker-compose.yml` in your `boxwatchr` folder:
 ```yaml
 services:
   boxwatchr:
-    image: nulcraft/boxwatchr:latest
+    image: ghcr.io/nulcraft/boxwatchr:latest
     container_name: boxwatchr
     restart: on-failure
     ports:
-      - "8143:80"
+      - "8143:8143"
       - "11334:11334"
     volumes:
       - ./config:/app/config
@@ -102,16 +101,7 @@ services:
         required: false
 ```
 
-Optionally create `config/.env` to set environment variables:
-
-```
-PUID=1000
-PGID=1000
-TZ=America/New_York
-RSPAMD_PASSWORD=
-```
-
-Then start it:
+Optionally create `config/.env` to configure environment variables (see the reference below), then start it:
 
 ```
 docker compose up -d
@@ -119,120 +109,78 @@ docker compose up -d
 
 ### After starting
 
-By default the web dashboard runs on port **8143**. Port **11334** is the rspamd web interface, which is optional to expose. The first startup takes 15-30 seconds for rspamd and the DNS resolver to initialize. Then open:
+The first startup takes 15-30 seconds for rspamd and the DNS resolver to initialize. Then open:
 
 ```
 http://your-server-ip:8143
 ```
 
-You'll be taken directly to the setup wizard.
+You'll land directly on the setup wizard.
 
 ---
 
-### Environment variables
+## Running on Unraid, Portainer, Synology, or other Docker GUIs
 
-**PUID and PGID** are the user ID and group ID that the boxwatchr process runs as inside the container. Match these to your host user so files written to `config/` and `data/` are owned by you and not root. Run `id` on your server to find your values:
+Skip the `.env` file entirely if your platform manages containers through a GUI. Configure the container with these settings and set environment variables directly through your platform's interface instead.
 
-```
-$ id
-uid=1000(youruser) gid=1000(youruser) groups=...
-```
+Image: `ghcr.io/nulcraft/boxwatchr:latest`
 
-**TZ** is your timezone in standard format, like `America/New_York`, `Europe/London`, or `Australia/Sydney`. Timestamps are stored in UTC and converted at display time, so you can change this anytime without affecting your data.
-
-**RSPAMD_PASSWORD** is the password for the rspamd web interface on port 11334. If left blank, a random password is generated at every startup. Set one here if you want consistent access across restarts.
-
----
-
-## Running on Unraid, Portainer, Synology, or other Docker GUI platforms
-
-If your platform manages containers through a GUI rather than docker-compose, skip the `.env` file entirely. Configure the container like this:
-
-**Image:** `ghcr.io/nulcraft/boxwatchr:latest`
-
-**Volumes:**
+Volumes:
 | Container path | Purpose |
 |---|---|
 | `/app/config` | Configuration storage |
 | `/app/data` | Database and Bayesian data |
 
-**Environment variables** (set these in your platform's GUI):
-| Variable | Default | Description |
-|---|---|---|
-| `PUID` | `1000` | User ID to run as |
-| `PGID` | `1000` | Group ID to run as |
-| `TZ` | `UTC` | Display timezone |
-| `RSPAMD_PASSWORD` | *(random)* | rspamd web interface password |
-
-**Ports:**
+Ports:
 | Host port | Container port | Purpose |
 |---|---|---|
-| `8143` | `80` | boxwatchr web dashboard |
+| `8143` | `8143` | boxwatchr web dashboard |
 | `11334` | `11334` | rspamd web interface (optional) |
 
-Do not use an env file or `--env-file` flag. Pass variables directly through your platform's environment variable interface. Pointing `--env-file` at a file that does not exist will prevent the container from starting.
+If you assign the container its own IP address, which is common on Unraid when using a bridge or macvlan network, port mappings are bypassed entirely. Access the container directly on its IP:
 
-**If you assign the container its own IP address** (common in Unraid using a bridge or macvlan network), port mappings are bypassed entirely. Access the container directly on its IP using the container ports:
-
-- Dashboard: `http://container-ip` or `http://container-ip:80`
+- Dashboard: `http://container-ip:8143`
 - rspamd: `http://container-ip:11334`
 
 ---
 
 ## First-time setup
 
-The setup wizard walks you through everything the first time. You only do this once.
+The setup wizard walks you through everything the first time. You only need to do this once.
 
-### IMAP credentials
+Fill in your IMAP credentials, then click Test Credentials. If the connection succeeds, a dropdown appears letting you pick which folder to watch. This is usually `INBOX`.
 
-- **Account Name:** Just a label for yourself, like "Gmail" or "Work Email" (I like to use my email address here)
-- **IMAP Host:** Your mail server's IMAP address (e.g. `imap.gmail.com`, `imap.fastmail.com`)
-- **Port:** Almost always `993` for SSL, `143` for STARTTLS or plain
-- **TLS Mode:** Choose `SSL` (the default, most secure), `STARTTLS`, or `None` (not recommended unless you know what you're doing)
-- **Username:** Your email address or IMAP username
-- **Password:** Your email password, or an app password if your provider requires it
+Log level controls how much detail shows up in the system logs. `INFO` is the right choice for most people. `DEBUG` is very noisy, so only enable it when you are trying to track down a specific problem.
 
-Once you fill in the credentials, click **Test Credentials**. This connects to your mail server and verifies everything works. If it connects successfully, a dropdown will appear letting you choose which folder to watch.
+Log retention controls how many days of log entries to keep. Set it to `0` to keep everything forever, or a number like `7` to automatically clean up entries older than a week. The logs table can grow very large on a busy mailbox, so it is worth setting a retention period.
 
-### Watch Folder
+Leave dry run on for now. It is covered in detail below, but the short version is that boxwatchr will run your rules and tell you what it would have done without actually touching any emails.
 
-This is the folder boxwatchr monitors for new messages. Usually this is `INBOX`. If your server uses a different folder naming convention (some IMAP servers use `INBOX` under a namespace), the test connection will show you exactly what's available.
+Web password is optional, but recommended if the dashboard is reachable from outside your network.
 
-### Application settings
-
-**Log Level** controls how much detail shows up in the system logs. `INFO` is the right choice for most people. `DEBUG` is very noisy. Only use it if something is broken and you're trying to figure out why.
-
-**Log Retention** is how many days of log entries to keep. Logs are stored in the SQLite database on your server. Set `0` to keep everything forever, or enter a number like `7` to automatically clean up entries older than 1 week. Word of warning: the logs table can grow to be HUGE. You've been warned. Prune often if necessary.
-
-**Dry Run:** Leave this alone for now. This is one of the most important features to understand, and it's covered in detail below. The short version is that when dry run is on, boxwatchr runs your rules and tells you what it would do, but doesn't actually move or modify any emails. Use this to make sure your rules are right before letting it loose.
-
-### Web Password
-
-Optional, but recommended if your dashboard is accessible over a network. Leave it blank if you're behind a reverse proxy that handles authentication, or if you're the only one who can reach it.
-
-Click **Save** to complete setup. You will need to restart your container with `docker compose restart` and once it's back up and running, boxwatchr will start monitoring your mailbox.
+Click Save, then restart the container. boxwatchr will start monitoring your mailbox on the next boot.
 
 ---
 
 ## Rules
 
-Rules are the heart of boxwatchr. Each rule has a **name**, a **match mode** (match all conditions, or match any condition), one or more **conditions**, and one or more **actions**.
+Rules are the heart of boxwatchr. Each rule has a name, a match mode (all conditions or any condition), one or more conditions, and one or more actions.
 
-Rules are evaluated in order, top to bottom. The first rule that matches an email wins. Processing stops there by default (a "continue processing" option is on the roadmap).
+Rules are evaluated in order, top to bottom. The first rule that matches an email wins and processing stops there. You can create, edit, reorder, and delete rules from the Rules page. Changes take effect immediately without a restart.
 
-You can create, edit, reorder, and delete rules from the **Rules** page in the dashboard. Rules are stored in the database alongside everything else. Changes take effect immediately without a restart.
+Note: Plans to support and/or operations are on the roadmap and I'd like to include them in the future. However, as of right now, first rule match wins.
 
 ---
 
 ### Conditions
 
-Each condition has three parts: a `field`, an `operator`, and a `value`. The dashboard gives you friendly dropdowns for all of these. The internal field and operator values are shown below for reference.
+Each condition has three parts: a field, an operator, and a value.
 
 #### Sender fields
 
 For the following examples, assume the sender address is `newsletter@mail.newsletter.example.com`.
 
-| Dashboard label | Field value | What it matches | Example |
+| Label | Field | What it matches | Example |
 |---|---|---|---|
 | Sender: full address | `sender` | The entire address | `newsletter@mail.newsletter.example.com` |
 | Sender: username | `sender_local` | Everything before the @ | `newsletter` |
@@ -241,30 +189,26 @@ For the following examples, assume the sender address is `newsletter@mail.newsle
 | Sender: domain (no subdomain) | `sender_domain_root` | Domain only, no subdomain or TLD | `example` |
 | Sender: TLD | `sender_domain_tld` | Top-level domain only | `com` |
 
-#### Recipient fields
-
-The same six options exist for the recipient address, using `recipient` instead of `sender` in the dropdown:
-
-`recipient`, `recipient_local`, `recipient_domain`, `recipient_domain_name`, `recipient_domain_root`, `recipient_domain_tld`
+The same six options exist for the recipient address, using `recipient` instead of `sender` in the dropdown.
 
 #### Message fields
 
-| Dashboard label | Field value | What it matches |
+| Label | Field | What it matches |
 |---|---|---|
 | Subject | `subject` | The email subject line |
-| Raw headers | `raw_headers` | All raw email headers (useful for `List-ID`, `X-Mailer`, etc.) |
+| Raw headers | `raw_headers` | All raw email headers, useful for things like `List-ID` or `X-Mailer` |
 
 #### Attachment fields
 
-| Dashboard label | Field value | What it matches |
+| Label | Field | What it matches |
 |---|---|---|
-| Attachment: file name | `attachment_name` | The full filename (e.g. `invoice.pdf`) |
-| Attachment: extension | `attachment_extension` | Just the extension (e.g. `pdf`, `exe`) |
-| Attachment: content type | `attachment_content_type` | The MIME type (e.g. `application/pdf`) |
+| Attachment: file name | `attachment_name` | The full filename, e.g. `invoice.pdf` |
+| Attachment: extension | `attachment_extension` | Just the extension, e.g. `pdf` or `exe` |
+| Attachment: content type | `attachment_content_type` | The MIME type, e.g. `application/pdf` |
 
 #### Spam score
 
-| Dashboard label | Field value | What it matches |
+| Label | Field | What it matches |
 |---|---|---|
 | rspamd score | `rspamd_score` | The numeric spam score from rspamd |
 
@@ -272,169 +216,97 @@ The same six options exist for the recipient address, using `recipient` instead 
 
 ### Operators
 
-**For all text fields:**
+For text fields:
 
-| Dashboard label | Operator value | What it does |
-|---|---|---|
-| equals | `equals` | Exact match |
-| does not equal | `not_equals` | Does not exactly match |
-| contains | `contains` | Value appears anywhere in the field |
-| does not contain | `not_contains` | Value does not appear in the field |
-| is empty | `is_empty` | Field is blank or missing (no value needed) |
+| Label | Operator |
+|---|---|
+| equals | `equals` |
+| does not equal | `not_equals` |
+| contains | `contains` |
+| does not contain | `not_contains` |
+| is empty | `is_empty` |
 
-**For rspamd score:**
+For rspamd score:
 
-| Dashboard label | Operator value | What it does |
-|---|---|---|
-| greater than | `greater_than` | Score is above the value |
-| less than | `less_than` | Score is below the value |
-| greater than or equal | `greater_than_or_equal` | Score is at or above the value |
-| less than or equal | `less_than_or_equal` | Score is at or below the value |
+| Label | Operator |
+|---|---|
+| greater than | `greater_than` |
+| less than | `less_than` |
+| greater than or equal | `greater_than_or_equal` |
+| less than or equal | `less_than_or_equal` |
 
-**A note on text matching:** When using `sender_local`, `sender_domain_name`, `sender_domain_root`, and their `recipient_*` equivalents, boxwatchr strips non-alphanumeric characters before comparing. This means `no.reply` and `noreply` both match if you search for `noreply`. This is intentional. It helps you match senders even when their address uses dots or dashes in different ways.
+A note on text matching: the `sender_local`, `sender_domain_name`, `sender_domain_root`, and their `recipient_*` equivalents all strip non-alphanumeric characters before comparing. This means `no.reply` and `noreply` both match if you search for `noreply`. It is intentional and helps you catch senders whose addresses use dots or dashes inconsistently.
 
 ---
 
 ### Actions
 
-Each action has a `type`. The `move` action also requires a `destination`.
-
-| Dashboard label | Action type | What it does |
+| Label | Type | What it does |
 |---|---|---|
 | Move to folder | `move` | Moves the email to the specified folder |
 | Mark as read | `mark_read` | Marks the email as read |
 | Mark as unread | `mark_unread` | Marks the email as unread |
-| Flag message | `flag` | Flags/stars the email |
-| Remove flag | `unflag` | Removes the flag/star |
-| Submit to rspamd as spam | `learn_spam` | Submits the email to rspamd for spam training |
-| Submit to rspamd as ham | `learn_ham` | Submits the email to rspamd as a good message |
+| Flag message | `flag` | Flags or stars the email |
+| Remove flag | `unflag` | Removes the flag or star |
+| Submit as spam | `learn_spam` | Submits the email to rspamd for spam training |
+| Submit as ham | `learn_ham` | Submits the email to rspamd as a legitimate message |
 
-**Move to folder** is the only "terminal" action. Once an email is moved, processing stops. You can still combine it with other actions like `mark_read` or `learn_spam` in the same rule and those will run before the move.
+Move is a terminal action. Once an email is moved, processing stops. You can combine it with other actions in the same rule and they will all run before the move happens. To be safe, create the move action at the very end of your actions list.
 
 ---
 
 ### Running a rule manually
 
-On the Rules page, each rule has a **Run** button. This applies that rule to all emails currently in your watched folder that are also in the database. It's a great way to catch up on emails that arrived before boxwatchr was running, or to test a new rule against your existing mail.
+Each rule has a Run button on the Rules page. This applies that rule to all emails currently in your watched folder that are also in the database. It is a good way to test a new rule against your existing mail or to catch up on messages that arrived before boxwatchr was running.
 
 ---
 
-## Dry Run mode
+## Dry run mode
 
-Dry Run is your safety net. When it's enabled:
+When dry run is enabled, boxwatchr still monitors your inbox in real time and still evaluates every email against your rules, but it does not move, mark, flag, or submit anything for training. It logs exactly what it would have done so you can review it in the dashboard.
 
-- boxwatchr still monitors your inbox in real time
-- It still evaluates every email against your rules
-- It still scores emails with rspamd
-- It does **not** move, mark, flag, or otherwise touch any emails
-- It does **not** submit anything to rspamd for learning
-- It logs exactly what it would have done, so you can review it in the dashboard
+This is how you should start. Run it in dry run mode for a day or two, watch the Emails page, and verify that your rules are matching what you expect. Once you are satisfied, turn dry run off in Config.
 
-This is how you should start out. Run it in dry run mode for a day or two, watch the Emails page, and verify that your rules are matching what you expect. Once you're satisfied, turn dry run off in Config.
+Recommended first-run workflow:
 
-### First-run workflow in Dry Run mode
-
-Here is the recommended order of operations when you are starting fresh with Dry Run enabled (after you have completed the initial setup):
-
-1. **Start the container.** boxwatchr connects to your inbox, scans all existing messages, scores them with rspamd, and logs them to the database. At this point no rules exist yet, so every email is logged with "No rule matched."
-
-2. **Create your rules.** Go to the Rules page and build your rules. The emails already in the database will be unaffected by this because they were processed before the rules existed.
-
-3. **Test your rules against your existing mail.** You have two options:
-
-   - **Run Rule (easiest):** On the Rules page, click **Run Rule** on each rule in order from top to bottom. Each run evaluates that rule against every email currently in your watched folder and writes a `[DRY RUN]` note showing what would have happened. Do them in order because that is how they will run in production.
-
-   - **Restart the container:** On startup, boxwatchr automatically re-evaluates all unprocessed emails against your current rules in priority order exactly as the live pipeline would behave. This gives you the most realistic picture of how your rules interact with each other.
-
-4. **Review the results.** Go to the Emails page and read the notes column. Each email shows which rule matched and what action would have been taken. If something looks wrong, check the Logs page for the detailed condition trace for that email.
-
-5. **Adjust your rules and repeat** until you are happy with the results.
-
-6. **Disable Dry Run** in Config. From this point forward, boxwatchr will act on your emails for real.
-
-One important thing to know: emails that were processed in dry run mode are **not** retroactively submitted to rspamd for learning if you later turn dry run off. The raw message body isn't stored, so that ship has sailed. This is fine. Those emails will eventually cycle out of your mailbox anyway.
+1. Start the container. boxwatchr connects to your inbox, scans all existing messages, scores them, and logs them to the database. No rules exist yet, so everything logs as "No rule matched."
+2. Create your rules on the Rules page.
+3. Click Run on each rule in order from top to bottom. Each run evaluates that rule against every email in your watched folder and writes a `[DRY RUN]` note showing what would have happened. Run them in order because that is how they run in production.
+4. Check the Emails page and review the notes column. If something does not look right, set the log level to DEBUG in Config and check the Logs page for the detailed condition trace on that email.
+5. Adjust your rules and repeat until you are happy with the results.
+6. Disable dry run in Config.
 
 ---
 
 ## Spam scoring
 
-Every email that comes through gets scored by rspamd. The score shows up in the Emails list and on the detail page for each email.
+Every email that comes through gets scored by rspamd. The score shows up in the Emails list and on the detail page for each email. Higher means more likely to be spam. rspamd checks DNS blocklists, your Bayesian filter, headers, URLs, and more.
 
-The score is a number where higher means more likely to be spam. rspamd looks at things like:
+One important thing to know: boxwatchr does not use any spam headers that may already exist in the email, such as `X-Spam-Score` or anything your mail provider added before delivery. Every message is scored fresh by the rspamd instance running inside the container, independent of what any upstream server decided.
 
-- DNS blocklists (Spamhaus, URIBL, DBL, and others)
-- Bayesian filter trained on your own mail
-- Header analysis
-- URL analysis
-- ...and a lot more
+You do not need to configure rspamd directly. It runs inside the container and boxwatchr handles talking to it. You control what to do with the score through your rules, usually something like "if score is above 6, move it to spam."
 
-You don't need to configure rspamd directly. It's running inside the container and boxwatchr handles talking to it. The only thing you control is what to do with the score, usually through a rule like "if score is above 6, treat it as spam."
+On a fresh install, rspamd's Bayesian database is completely empty and untrained. This means the spam score relies almost entirely on DNS blocklists and rule-based checks, which can produce a lot of false positives depending on your mail. Before building rules that act on spam scores, it is worth spending time on the Training page to teach rspamd what is and is not spam for your specific mailbox. The more you train it, the more accurate the scores become.
 
 ### Bayesian training
 
-The spam engine gets smarter when you train it. You can train it by adding a `learn_spam` or `learn_ham` action to a rule, and every email that matches that rule automatically gets submitted for training.
-
-Bayesian data is stored on your server at `data/redis/` and persists across container restarts. Redis writes it to disk within 60 seconds of any change.
+The spam engine gets smarter when you train it. Add a `learn_spam` or `learn_ham` action to a rule and every email that matches it automatically gets submitted for training. The Training page lets you submit an entire folder at once by selecting a folder, choosing spam or ham, and submitting. Bayesian data is stored at `data/redis/` and persists across container restarts.
 
 ---
 
-## The dashboard pages
+## Dashboard pages
 
-### Dashboard
+The dashboard page shows aggregate stats: total emails processed, how many were trained as spam or ham, pending emails, a histogram of spam scores across all your mail, and a table showing how often each rule has matched.
 
-The landing page shows you aggregate stats:
-- Total emails processed
-- How many have been trained as spam
-- How many have been trained as ham
-- Pending emails (scored but not yet fully processed)
-- A histogram of spam scores across all your mail
-- A table showing how many times each rule has matched
+The emails page is a full list of every email that came through, newest first. You can see the sender, subject, date, spam score, which rule matched, and what action was taken. Click any email to see the full detail page, which includes all headers, attachments, the full action history, and the log entries tied to that specific message.
 
-### Emails
+The rules page is where you create, edit, delete, and reorder your rules.
 
-A full list of every email that came through, newest first. You can see the sender, subject, date, spam score, which rule matched, and what happened. Click any email to see full details.
+The training page is where you bulk-train rspamd's Bayesian filter. Select a folder from your mailbox, choose spam or ham, and submit. boxwatchr connects to your IMAP account, fetches every message in that folder, and submits each one to rspamd while streaming progress back to you in real time. This is especially important on a fresh install when the Bayesian database is empty and spam scores are unreliable.
 
-### Email detail
+The logs page shows system logs, newest first, filterable by level and date range. Check here first if something is not behaving the way you expect.
 
-Shows everything about a specific email:
-- All the headers
-- Attachments
-- Spam score
-- Which rule matched (if any)
-- Every action that was taken (or would have been taken in dry run)
-- The full action history if you've manually marked it as spam/ham
-- The log entries tied to that specific email
-
-### Rules
-
-Create, edit, delete, and reorder your rules. The order matters. Rules are evaluated top to bottom and the first match wins.
-
-### Logs
-
-System logs, newest first. Filterable by log level and date range. Useful for debugging if something isn't behaving the way you expect.
-
-### Config
-
-Change any of your account and application settings here. All changes take effect immediately without restarting the container. If you change the IMAP credentials or watch folder, the connection reconnects automatically. If you change the web password, you are logged out immediately.
-
-There is no "re-run setup" button. The Config page has all the same fields as the setup wizard.
-
----
-
-## Ports reference
-
-| Port | What it is |
-|---|---|
-| `8143` | boxwatchr web dashboard |
-| `11334` | rspamd web interface (optional, password protected) |
-
----
-
-## rspamd web interface
-
-The rspamd controller is exposed on port 11334. This is an optional extra. You don't need it to use boxwatchr, but it lets you dig into rspamd directly if you're curious or debugging.
-
-If you set `RSPAMD_PASSWORD` in your `.env`, use that password to log in. If you didn't set one, boxwatchr generated a random password at startup and printed it to the container logs. Run `docker compose logs boxwatchr | grep "rspamd web interface"` to find it. The password changes every restart, so set one in your `.env` if you want consistent access. boxwatchr still talks to rspamd internally either way.
+The config page has all your account and application settings. Changes take effect immediately. If you change your IMAP credentials or watch folder, the connection reconnects automatically. If you change your web password, you are logged out immediately.
 
 ---
 
@@ -444,74 +316,72 @@ These go in `config/.env` and control container-level behavior. Everything else 
 
 | Variable | Default | Description |
 |---|---|---|
-| `PUID` | `99` | User ID to run as inside the container |
-| `PGID` | `100` | Group ID to run as inside the container |
-| `TZ` | `UTC` | Timezone used for display. Logs are stored in UTC and converted at render time. |
-| `RSPAMD_PASSWORD` | *(random)* | Password for the rspamd web interface on port 11334. Randomized at startup if not set. |
+| `PUID` | `99` | User ID to run as inside the container. Match this to your host user to avoid permission issues on mounted volumes. Run `id` on your server to find your value. |
+| `PGID` | `100` | Group ID to run as inside the container. |
+| `TZ` | `UTC` | Timezone used for log timestamps. Logs are stored in UTC and converted at display time, so you can change this at any time without affecting existing data. |
+| `WEB_PORT` | `8143` | Internal port the web dashboard listens on. If you change this, update your Docker port mapping to match. |
+| `RSPAMD_PASSWORD` | *(random)* | Password for the rspamd web interface on port 11334. A random password is generated at every startup if not set. |
+
+---
+
+## Ports reference
+
+| Port | What it is |
+|---|---|
+| `8143` | boxwatchr web dashboard (configurable via `WEB_PORT`) |
+| `11334` | rspamd web interface (optional, password protected) |
+
+---
+
+## rspamd web interface
+
+The rspamd controller is exposed on port 11334. You do not need it to use boxwatchr, but it is available if you want to dig into rspamd directly.
+
+If you set `RSPAMD_PASSWORD` in your `.env`, use that to log in. If you did not set one, boxwatchr generated a random password at startup and logged it to the container output. Run this to find it:
+
+```
+docker compose logs boxwatchr | grep "rspamd web interface"
+```
+
+The password changes every restart unless you set one in your `.env`. boxwatchr still talks to rspamd internally either way.
 
 ---
 
 ## Data persistence
 
-boxwatchr stores everything in two folders on your host:
+`config/` contains your `.env` file. You can also create `rspamd/local.d/` inside it and place `.conf` files there to override rspamd defaults. No additional overrides have been tested with boxwatchr, and incorrect rspamd configuration can affect scoring or cause rspamd to fail at startup, so proceed carefully.
 
-- `config/` contains your `.env` file. You can optionally create `rspamd/local.d/` and place `.conf` files there to override rspamd defaults, but no additional overrides have been tested with boxwatchr. Incorrect rspamd configuration can affect scoring, Bayesian learning, or cause rspamd to fail at startup. Proceed with caution.
-- `data/` contains the SQLite database (`boxwatchr.db`) and Redis Bayesian data (`redis/`). Your rules and account settings are stored in the database alongside your email history.
+`data/` contains the SQLite database (`boxwatchr.db`) and Redis Bayesian data (`redis/`). Your rules and account settings are stored in the database alongside your email history.
 
-**Back these up.** The database has your entire email processing history. The Redis data has your Bayesian training. Losing it means rspamd starts fresh.
+Back these up. The database has your entire email processing history and the Redis data has your Bayesian training. Losing them means starting from scratch.
+
+---
+
+## Security
+
+boxwatchr stores your IMAP password encrypted in the database. The encryption key lives at `data/secret.key` on your server. Anyone with full access to your server could theoretically recover it, so use this on a server you control and trust.
+
+The rspamd HTTP connection is plain HTTP on localhost. There is no need for TLS when both services are running on the same machine.
+
+### Reverse proxy
+
+Running boxwatchr behind a reverse proxy is strongly recommended if your dashboard is reachable from outside your home network. It lets you serve the dashboard over HTTPS with a real certificate, use your own domain, and add an extra authentication layer on top of the built-in web password.
+
+Popular options include Nginx Proxy Manager, Caddy, Traefik, and nginx. Example configurations for nginx and Apache are in the `reverse-proxy/` directory of this repository. They cover SSL, OCSP stapling, security headers, IP-based access control, optional basic auth, and sub-path proxying for the rspamd interface at `/rspamd/`.
 
 ---
 
 ## Troubleshooting
 
-**The dashboard won't load**
-
-Give it a minute after first startup. rspamd and the DNS resolver take a moment to initialize. Check `docker compose logs boxwatchr -f` to follow what's happening.
-
-**My IMAP test connection fails**
-
-Double-check the host, port, and TLS mode. For Gmail, use `imap.gmail.com`, port `993`, SSL, and make sure you're using an **App Password** if you have 2-factor authentication enabled. Google requires this because your regular account password won't work for IMAP. For most providers, SSL on port 993 is correct.
-
-**Emails aren't being processed**
-
-Check the Logs page first. Something is almost certainly logged there. Common issues:
-
-- Dry Run is on (this is expected behavior, not a bug)
-- No rules are matching. Check the Emails page. If the email shows up there, boxwatchr saw it. If no rule matched, the matched rule column will be empty.
-- The IMAP connection dropped and didn't reconnect. Check docker logs.
-
-**I moved emails from another folder and some were not processed**
-
-When using IMAP IDLE, boxwatchr detects new messages when the server sends a notification. If you move a batch of emails at once, the notification can fire before all of them have landed in the folder. Messages that arrive after the check completes will be caught by the periodic rescan, which runs every 5 minutes and reconciles the folder against the database.
-
-**A rule isn't matching what I expect**
-
-Use the **Run** button on the rule to test it against your existing mail. If you need to see condition-level evaluation detail, set the log level to DEBUG in Config and check the Logs page for the email in question.
-
-**The spam score is always 0.0**
-
-This usually means rspamd isn't running or the DNS resolver isn't working. Check `docker compose logs boxwatchr` for health check failures. rspamd needs working DNS to query blocklists, which is why boxwatchr includes its own internal resolver.
-
-**I lost my web password**
-
-Stop the container, open the database file at `data/boxwatchr.db` with any SQLite tool, and delete the `web_password` row from the `config` table. With no password set, the dashboard is accessible without logging in.
-
----
-
-## A note on email security
-
-boxwatchr stores your IMAP password encrypted in the database. It's not stored in plain text. The encryption key is stored in `data/secret.key` on your server, so anyone with full access to your server could theoretically recover it. Use this on a server you control and trust.
-
-The rspamd HTTP connection is intentionally plain HTTP on localhost. There's no need for TLS when both services are on the same machine.
-
-### Reverse proxy
-
-Running boxwatchr behind a reverse proxy is strongly recommended if your dashboard is reachable from outside your home network. A reverse proxy lets you:
-
-- Serve the dashboard over HTTPS with a real certificate (e.g. `https://boxwatchr.example.com`)
-- Use your own domain instead of a raw IP address and port
-- Add HTTP basic authentication at the proxy level as an extra layer on top of (or instead of) the built-in web password
-
-Popular options include Nginx Proxy Manager, Caddy, Traefik, and nginx. For nginx and Apache, example configurations are included in the `reverse-proxy/` directory of this repository. They cover SSL, OCSP stapling, security headers, IP-based access control, optional basic auth, and sub-path proxying for the rspamd web interface at `/rspamd/`.
-
-One note on authentication: if you use a reverse proxy project that supports single sign-on (SSO) or identity-aware proxy features, passing those authentication headers through to boxwatchr has not been tested. The built-in web password is the supported authentication method.
+- **The dashboard won't load after startup:**
+  - Give it a minute. rspamd and the DNS resolver need time to initialize on first boot. Follow `docker compose logs boxwatchr -f` to see what's happening in real time.
+- **The IMAP test connection fails:**
+  - Double-check the host, port, and TLS mode. A lot of connection issues come from choosing the wrong port when it pertains to SSL/starttls.
+- **Emails aren't being processed:**
+  - Check the Logs page first. Something is almost certainly logged there. Common causes are dry run being enabled, no rules matching (if the email shows up in the Emails page, boxwatchr saw it, and a blank matched rule column just means nothing matched it), or the IMAP connection dropping.
+- **The spam score is always 0.0:**
+  - rspamd is not running or the DNS resolver is not working. Check `docker compose logs boxwatchr` for health check failures. rspamd needs working DNS to query blocklists, which is why boxwatchr includes its own internal resolver.
+- **You've lost your web password:**
+  - Stop the container, open `data/boxwatchr.db` with any SQLite tool, and delete the `web_password` row from the `config` table. With no password set, the dashboard is accessible without logging in.
+- **Moved emails from another folder and some were not processed:**
+  - When using IMAP IDLE, boxwatchr detects new messages when the server sends a notification. If you move a batch of emails at once, the notification can fire before all of them have landed. Messages that arrive after the check completes will be caught by the next periodic rescan.
