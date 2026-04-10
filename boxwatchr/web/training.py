@@ -16,6 +16,14 @@ logger = get_logger("boxwatchr.web.training")
 
 _jobs = {}
 _jobs_lock = threading.Lock()
+_JOB_STALE_SECONDS = 300
+
+def _cleanup_stale_jobs():
+    now = time.monotonic()
+    with _jobs_lock:
+        stale = [k for k, v in _jobs.items() if v["done"].is_set() and now - v["created"] > _JOB_STALE_SECONDS]
+        for k in stale:
+            del _jobs[k]
 
 
 def _decode_subject(raw):
@@ -205,6 +213,8 @@ def training_start():
     if folder not in folders:
         abort(400)
 
+    _cleanup_stale_jobs()
+
     job_id = secrets.token_hex(16)
     q = queue.Queue()
     done_event = threading.Event()
@@ -234,17 +244,21 @@ def training_stream(job_id):
     def generate():
         q = job["queue"]
         done = job["done"]
-        while True:
-            try:
-                data = q.get(timeout=0.5)
-                yield "data: %s\n\n" % data
-                event_type = json.loads(data).get("type")
-                if event_type in ("done", "error"):
-                    break
-            except queue.Empty:
-                if done.is_set():
-                    break
-                yield ": ping\n\n"
+        try:
+            while True:
+                try:
+                    data = q.get(timeout=0.5)
+                    yield "data: %s\n\n" % data
+                    event_type = json.loads(data).get("type")
+                    if event_type in ("done", "error"):
+                        break
+                except queue.Empty:
+                    if done.is_set():
+                        break
+                    yield ": ping\n\n"
+        finally:
+            with _jobs_lock:
+                _jobs.pop(job_id, None)
 
     return Response(
         generate(),

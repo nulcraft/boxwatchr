@@ -9,29 +9,35 @@ from boxwatchr.web.app import app, APP_VERSION
 _cache_lock = threading.Lock()
 _cache_value = None
 _cache_time = 0
+_cache_fetching = False
 _CACHE_TTL = 3600
 
 _GITHUB_RELEASES_URL = "https://api.github.com/repos/nulcraft/boxwatchr/releases/latest"
 
 def _fetch_latest():
-    global _cache_value, _cache_time
+    global _cache_value, _cache_time, _cache_fetching
     now = time.monotonic()
     with _cache_lock:
         if _cache_value is not None and now - _cache_time < _CACHE_TTL:
             return _cache_value
-    release_notes = ""
+        if _cache_fetching:
+            return _cache_value
+        _cache_fetching = True
     try:
         req = urllib.request.Request(_GITHUB_RELEASES_URL, headers={"Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode())
             latest = data["tag_name"].lstrip("v")
             release_notes = data.get("body", "")
+        with _cache_lock:
+            _cache_value = (latest, release_notes)
+            _cache_time = time.monotonic()
+        return _cache_value
     except Exception:
         return None
-    with _cache_lock:
-        _cache_value = (latest, release_notes)
-        _cache_time = time.monotonic()
-    return latest, release_notes
+    finally:
+        with _cache_lock:
+            _cache_fetching = False
 
 @app.route("/api/version/check")
 def version_check():

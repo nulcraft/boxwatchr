@@ -16,6 +16,7 @@ def action_sentence(action, dry_run):
             return "Would have submitted to rspamd as spam."
         if t == "learn_ham":
             return "Would have submitted to rspamd as ham."
+        return "Would have performed unknown action: %s." % t
     else:
         if t == "move":
             return "Moved to %s." % dest
@@ -31,7 +32,7 @@ def action_sentence(action, dry_run):
             return "Submitted to rspamd as spam."
         if t == "learn_ham":
             return "Submitted to rspamd as ham."
-    return ""
+        return "Performed unknown action: %s." % t
 
 def failed_action_sentence(action):
     t = action["type"]

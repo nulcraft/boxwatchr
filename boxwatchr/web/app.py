@@ -211,6 +211,9 @@ def start_dashboard():
     app.secret_key = _get_or_create_session_secret()
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
+    # Only mark cookies Secure when the deployment is behind HTTPS. Set SECURE_COOKIES=true
+    # in the container environment when proxying through nginx/Caddy/etc. with TLS.
+    app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SECURE_COOKIES", "false").lower() == "true"
     import boxwatchr.web.login
     import boxwatchr.web.setup
     import boxwatchr.web.config

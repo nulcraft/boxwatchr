@@ -372,6 +372,7 @@ def process_email(client, uid, message, current_uids=None):
         imap_actions = [a for a in actions if a["type"] not in {"learn_spam", "learn_ham"}]
         learn_actions = [a for a in actions if a["type"] in {"learn_spam", "learn_ham"}]
 
+        executed_imap = []
         for action in imap_actions:
             action_type = action["type"]
             logger.debug(
@@ -379,9 +380,20 @@ def process_email(client, uid, message, current_uids=None):
                 action_type, action.get("destination") or "none", uid,
                 extra={"email_id": email_id}
             )
-            imap.execute_action(client, action, uid, email_id=email_id)
+            try:
+                imap.execute_action(client, action, uid, email_id=email_id)
+                executed_imap.append((action, False))
+            except Exception as e:
+                logger.error(
+                    "Failed to execute action %s on UID %s: %s",
+                    action_type, uid, e,
+                    extra={"email_id": email_id}
+                )
+                executed_imap.append((action, True))
             if action_type in TERMINAL_ACTIONS:
                 break
+
+        imap_all_ok = not any(had_error for _, had_error in executed_imap)
 
         rspamd_learned = None
         for action in learn_actions:
@@ -411,14 +423,16 @@ def process_email(client, uid, message, current_uids=None):
 
         notes_parts = [build_notes_opener(matched_rule, config.DRYRUN)]
         if actions:
-            for action in actions:
-                if action["type"] in {"learn_spam", "learn_ham"}:
-                    if config.DRYRUN or rspamd_learned is not None:
-                        notes_parts.append(action_sentence(action, config.DRYRUN))
-                    else:
-                        notes_parts.append(failed_action_sentence(action))
+            for action, had_error in executed_imap:
+                if had_error:
+                    notes_parts.append(failed_action_sentence(action))
                 else:
                     notes_parts.append(action_sentence(action, config.DRYRUN))
+            for action in learn_actions:
+                if config.DRYRUN or rspamd_learned is not None:
+                    notes_parts.append(action_sentence(action, config.DRYRUN))
+                else:
+                    notes_parts.append(failed_action_sentence(action))
         else:
             notes_parts.append("No action taken.")
         processed_notes = " ".join(notes_parts)
@@ -427,13 +441,12 @@ def process_email(client, uid, message, current_uids=None):
 
         history = []
         if not config.DRYRUN:
-            for a in actions:
-                if a["type"] in {"learn_spam", "learn_ham"}:
-                    continue
-                entry = {"at": processed_at, "by": "boxwatchr", "action": a["type"]}
-                if "destination" in a:
-                    entry["destination"] = a["destination"]
-                history.append(entry)
+            for a, had_error in executed_imap:
+                if not had_error:
+                    entry = {"at": processed_at, "by": "boxwatchr", "action": a["type"]}
+                    if "destination" in a:
+                        entry["destination"] = a["destination"]
+                    history.append(entry)
 
         enqueue_email(
             uid=str(uid),
@@ -448,7 +461,7 @@ def process_email(client, uid, message, current_uids=None):
             actions=actions,
             raw_headers=raw_headers,
             attachments=attachments,
-            processed=0 if config.DRYRUN else 1,
+            processed=0 if (not imap_all_ok or config.DRYRUN) else 1,
             processed_at=processed_at,
             processed_notes=processed_notes,
             email_id=email_id,

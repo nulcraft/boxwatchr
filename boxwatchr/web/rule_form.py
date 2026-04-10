@@ -221,7 +221,7 @@ def rule_run(rule_id):
     try:
         client = imap.connect()
         try:
-            client.select_folder(config.IMAP_FOLDER)
+            imap.select_folder(client)
             current_uids = set(client.search(["ALL"]))
             logger.debug("Rule run: %s UID(s) currently in %s", len(current_uids), config.IMAP_FOLDER)
             processed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
