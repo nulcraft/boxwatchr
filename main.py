@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from email.header import decode_header, make_header
 from email import message_from_bytes, message_from_string
 from boxwatchr import config, imap, spam, rules, health, __version__
-from boxwatchr.web.app import start_dashboard
 from boxwatchr.imap import FatalImapError
 from boxwatchr.notes import action_sentence, failed_action_sentence, skipped_learn_sentence, build_notes_opener
 from boxwatchr.database import set_processing, clear_email_id_from_logs, enqueue_email, enqueue_email_update, get_known_uids, get_unprocessed_emails, get_email_by_content_hash, update_email_uid, compute_content_hash
@@ -485,7 +484,7 @@ def main():
     health.initialize_database()
     config.load()
 
-    start_dashboard()
+    health.start_web()
     health.start_services_sequentially()
 
     if not config.SETUP_COMPLETE:

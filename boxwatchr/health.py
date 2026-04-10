@@ -56,7 +56,7 @@ def _check_unbound():
     return _tcp_check("127.0.0.1", 5335)
 
 def _check_web():
-    return _tcp_check("127.0.0.1", 80)
+    return _tcp_check("127.0.0.1", int(os.environ.get("WEB_PORT", 8143)))
 
 def _check_imap():
     if not config.SETUP_COMPLETE or not config.IMAP_HOST:
@@ -185,6 +185,14 @@ def start_services_sequentially():
 
         logger.info("%s service is up and ready.", name)
         print(flush=True)
+
+def start_web():
+    from boxwatchr.web.app import start_dashboard
+    print(_DIVIDER, flush=True)
+    print("Starting: Web service...", flush=True)
+    print(_DIVIDER, flush=True)
+    start_dashboard()
+    print(flush=True)
 
 def start_imap(loaded_rules):
     print(_DIVIDER, flush=True)
