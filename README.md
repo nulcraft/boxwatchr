@@ -321,6 +321,7 @@ These go in `config/.env` and control container-level behavior. Everything else 
 | `TZ` | `UTC` | Timezone used for log timestamps. Logs are stored in UTC and converted at display time, so you can change this at any time without affecting existing data. |
 | `WEB_PORT` | `8143` | Internal port the web dashboard listens on. If you change this, update your Docker port mapping to match. |
 | `RSPAMD_PASSWORD` | *(random)* | Password for the rspamd web interface on port 11334. A random password is generated at every startup if not set. |
+| `SECURE_COOKIES` | `false` | Set to `true` if you are running boxwatchr behind an HTTPS reverse proxy. Marks the session cookie as `Secure` so it is only sent over encrypted connections. Leave unset for plain HTTP deployments. |
 
 ---
 

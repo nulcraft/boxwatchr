@@ -176,7 +176,7 @@ def _create_schema(conn):
     """)
     logger.debug("Config table created")
 
-    logger.info("Database schema v1 created")
+    logger.info("Database schema v2 created")
 
 def initialize():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -595,19 +595,6 @@ def get_email_by_content_hash(content_hash):
             ).fetchone()
     except sqlite3.Error as e:
         logger.error("Failed to query email by content_hash: %s", e)
-        return None
-
-def get_email_by_message_id(message_id):
-    if not message_id:
-        return None
-    try:
-        with _db() as conn:
-            return conn.execute(
-                "SELECT * FROM emails WHERE message_id = ?",
-                (message_id,)
-            ).fetchone()
-    except sqlite3.Error as e:
-        logger.error("Failed to query email by message_id: %s", e)
         return None
 
 def update_email_uid(email_id, uid):

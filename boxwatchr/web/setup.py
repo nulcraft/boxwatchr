@@ -1,3 +1,5 @@
+import ipaddress
+import socket
 import time
 import threading
 from flask import render_template, request, redirect, session, url_for
@@ -15,14 +17,25 @@ def _test_imap_rate_limited():
     now = time.monotonic()
     with _test_imap_lock:
         attempts = [t for t in _test_imap_attempts.get(ip, []) if now - t < _TEST_IMAP_WINDOW]
+        _test_imap_attempts[ip] = attempts
         stale = [k for k, v in _test_imap_attempts.items() if k != ip and not any(now - t < _TEST_IMAP_WINDOW for t in v)]
         for k in stale:
             del _test_imap_attempts[k]
         if len(attempts) >= _TEST_IMAP_MAX_ATTEMPTS:
             return True
         attempts.append(now)
-        _test_imap_attempts[ip] = attempts
         return False
+
+def _resolves_to_loopback(host):
+    try:
+        infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        for _family, _type, _proto, _canonname, sockaddr in infos:
+            addr = ipaddress.ip_address(sockaddr[0])
+            if addr.is_loopback:
+                return True
+    except Exception:
+        pass
+    return False
 
 @app.route("/setup", methods=["GET"])
 def setup():
@@ -96,6 +109,10 @@ def test_imap():
 
     if not host or not username or not password:
         return {"success": False, "error": "Host, username, and password are required."}
+
+    if _resolves_to_loopback(host):
+        logger.warning("test-imap blocked loopback connection attempt to %s from %s", host, request.remote_addr)
+        return {"success": False, "error": "Connection to loopback addresses is not allowed."}, 400
 
     try:
         from imapclient import IMAPClient
