@@ -4,7 +4,7 @@ services:
     container_name: boxwatchr
     restart: on-failure
     ports:
-      - "8143:80"
+      - "8143:8143"
       - "11334:11334"
     volumes:
       - ./config:/app/config
@@ -15,7 +15,7 @@ services:
       - path: ./config/.env
         required: false
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG && curl -sf http://127.0.0.1:11334/ping > /dev/null && curl -sf http://127.0.0.1:80/ > /dev/null && python3 -c \"import socket; socket.create_connection(('127.0.0.1', 5335), 2).close()\""]
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG && curl -sf http://127.0.0.1:11334/ping > /dev/null && curl -sf http://127.0.0.1:${WEB_PORT:-8143}/ > /dev/null && python3 -c \"import socket; socket.create_connection(('127.0.0.1', 5335), 2).close()\""]
       interval: 30s
       timeout: 5s
       retries: 3
