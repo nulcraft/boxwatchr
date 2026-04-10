@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-04-10
+
 ### Fixed
 - Web dashboard was hardcoded to port 80 internally and the Dockerfile exposed the wrong port (8080). Dashboard now defaults to port 8143 and is configurable via `WEB_PORT`. (#74)
 - `_check_web()` in the health monitor was hardcoded to port 80, meaning it would always report the web service as down after the port change. (#76)
