@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Dashboard Trained: Spam and Trained: Ham stats now show live Bayes classifier revision counts from the rspamd `/stat` endpoint instead of counting rows in the emails table. (#81)
+
 ### Fixed
 - IMAP action failures in `process_email` no longer abort remaining actions or lose the email record. Each action is now wrapped individually; if any fail, the email is stored with `processed=0` for retry on next startup, and the notes reflect which actions succeeded and which failed.
 - Training session jobs are now removed from memory when the SSE stream closes, and cleaned up on the next training start if older than 5 minutes and completed, preventing unbounded memory growth in long-running deployments.
