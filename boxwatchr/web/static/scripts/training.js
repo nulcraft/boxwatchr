@@ -26,7 +26,7 @@
         progressCount.textContent = done + " / " + total;
     }
 
-    function addRow(subject, date, result, success) {
+    function addRow(subject, date, result) {
         var tr = document.createElement("tr");
 
         var tdSubject = document.createElement("td");
@@ -56,6 +56,9 @@
         tr.appendChild(tdResult);
 
         resultsBody.insertBefore(tr, resultsBody.firstChild);
+        while (resultsBody.rows.length > 25) {
+            resultsBody.removeChild(resultsBody.lastChild);
+        }
     }
 
     function finishProgress(label) {
@@ -118,7 +121,7 @@
                     setProgress(0, msg.total);
                 } else if (msg.type === "progress") {
                     setProgress(msg.done, msg.total);
-                    addRow(msg.subject, msg.date, msg.result, msg.success);
+                    addRow(msg.subject, msg.date, msg.result);
                 } else if (msg.type === "done") {
                     source.close();
                     activeSource = null;
