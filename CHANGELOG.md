@@ -8,12 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- rspamd no longer logs a warning about missing `stats.ucl` on every container restart. The entrypoint now pre-creates the file before supervisord starts. (#83)
-
-### Changed
-- Dashboard Trained: Spam and Trained: Ham stats now show live Bayes classifier revision counts from the rspamd `/stat` endpoint instead of counting rows in the emails table. (#81)
-
-### Fixed
 - IMAP action failures in `process_email` no longer abort remaining actions or lose the email record. Each action is now wrapped individually; if any fail, the email is stored with `processed=0` for retry on next startup, and the notes reflect which actions succeeded and which failed.
 - Training session jobs are now removed from memory when the SSE stream closes, and cleaned up on the next training start if older than 5 minutes and completed, preventing unbounded memory growth in long-running deployments.
 - `_test_imap_rate_limited` in `setup.py` now writes back the filtered attempt list before checking the rate limit, so stale timestamps are pruned for the current IP even when it is blocked.
@@ -22,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Database schema creation log message now correctly reads "v2 created" instead of "v1 created".
 - `action_sentence` in `notes.py` now returns a descriptive fallback string for unknown action types instead of silently returning an empty string.
 - Removed `get_email_by_message_id` from `database.py`; the function was never called anywhere in the codebase.
+- rspamd no longer logs a warning about missing `stats.ucl` on every container restart. The entrypoint now pre-creates the file before supervisord starts. (#83)
+
+### Changed
+- Dashboard Trained: Spam and Trained: Ham stats now show live Bayes classifier revision counts from the rspamd `/stat` endpoint instead of counting rows in the emails table. (#81)
 
 ### Security
 - `SESSION_COOKIE_SECURE` is now configurable via the `SECURE_COOKIES=true` environment variable. Defaults to `false` to preserve compatibility with HTTP-only deployments; set to `true` when running behind an HTTPS reverse proxy.
@@ -29,15 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.1] - 2026-04-10
 
+### Added
+- `WEB_PORT` environment variable controls the internal port the web dashboard listens on, defaulting to 8143. (#74)
+- Web service startup now has its own labeled banner in the container startup output, consistent with all other services. (#76)
+
 ### Fixed
 - Web dashboard was hardcoded to port 80 internally and the Dockerfile exposed the wrong port (8080). Dashboard now defaults to port 8143 and is configurable via `WEB_PORT`. (#74)
 - `_check_web()` in the health monitor was hardcoded to port 80, meaning it would always report the web service as down after the port change. (#76)
 - `docker-compose.yml` port mapping was `8143:80` (wrong container port) and the healthcheck used a hardcoded port 80. (#77)
 - Navbar hamburger menu appeared too late (md breakpoint, 768px), causing nav links to overflow the navbar background before collapsing. (#73)
-
-### Added
-- `WEB_PORT` environment variable controls the internal port the web dashboard listens on, defaulting to 8143. (#74)
-- Web service startup now has its own labeled banner in the container startup output, consistent with all other services. (#76)
 
 ### Changed
 - Training moved before Logs in the navigation bar. (#77)
@@ -50,13 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rule templates on the new rule form: Move newsletter, Learn spam, Learn ham. (#65)
 - Training page at `/training` for bulk rspamd Bayes learning from any IMAP folder, with a live progress bar and per-message results table. (#67)
 
+### Fixed
+- Nav bar icons now align vertically with their text labels. (#66)
+
 ### Changed
 - Replaced project logo with new design; updated favicon, navbar icon, and login page icon.
 - Base font sizes increased by 1px (xs: 11→12, sm: 12→13, base: 13→14). (#66)
 - Rule action buttons now wrap on narrow screens. (#66)
-
-### Fixed
-- Nav bar icons now align vertically with their text labels. (#66)
 
 ## [1.0.16] - 2026-04-08
 
