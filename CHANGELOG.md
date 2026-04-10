@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-04-10
+
 ### Fixed
-- Training page now logs job start, message count, and completion summary to the application log.
-- Training results table is now capped at 25 visible rows, preventing extreme page size when training large folders.
+- Training page now logs job start, message count, and completion summary to the application log. (#86)
+- Training results table is now capped at 25 visible rows, preventing extreme page size when training large folders. (#86)
 - IMAP action failures in `process_email` no longer abort remaining actions or lose the email record. Each action is now wrapped individually; if any fail, the email is stored with `processed=0` for retry on next startup, and the notes reflect which actions succeeded and which failed.
 - Training session jobs are now removed from memory when the SSE stream closes, and cleaned up on the next training start if older than 5 minutes and completed, preventing unbounded memory growth in long-running deployments.
 - `_test_imap_rate_limited` in `setup.py` now writes back the filtered attempt list before checking the rate limit, so stale timestamps are pruned for the current IP even when it is blocked.
