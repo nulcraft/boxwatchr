@@ -8,7 +8,7 @@ from boxwatchr.logger import get_logger
 
 logger = get_logger("boxwatchr.rules")
 
-_rules = []
+_rules = {}  # {account_id: [rule_dicts]}
 _rules_lock = threading.Lock()
 
 TERMINAL_ACTIONS = {"move"}
@@ -17,8 +17,6 @@ _TEXT_OPERATORS = {"equals", "not_equals", "contains", "not_contains", "is_empty
 _NUMERIC_OPERATORS = {"greater_than", "less_than", "greater_than_or_equal", "less_than_or_equal"}
 
 def load_rules(account_id=None):
-    global _rules
-
     from boxwatchr import database
     if account_id is None:
         from boxwatchr import config
@@ -28,21 +26,30 @@ def load_rules(account_id=None):
 
     validated = []
     for row in rows:
+        if not row["enabled"]:
+            continue
         rule_dict = {
             "name": row["name"],
             "match": row["match"],
             "conditions": json.loads(row["conditions"] or "[]"),
             "actions": json.loads(row["actions"] or "[]"),
+            "continue_processing": bool(row["continue_processing"]),
         }
         result = validate_rule(rule_dict)
         if result:
             result["id"] = row["id"]
+            result["preset_id"] = row["preset_id"]
             validated.append(result)
 
     with _rules_lock:
-        _rules = validated
+        _rules[account_id] = validated
 
     return validated
+
+def load_all_rules(account_ids):
+    """Load rules for multiple accounts at once."""
+    for account_id in account_ids:
+        load_rules(account_id)
 
 def validate_rule(rule):
     name = rule.get("name", "").strip()
@@ -189,7 +196,8 @@ def validate_rule(rule):
         "name": name,
         "match": match,
         "conditions": validated_conditions,
-        "actions": validated_actions
+        "actions": validated_actions,
+        "continue_processing": rule.get("continue_processing", False),
     }
 
 def _extract_fields(email):
@@ -408,7 +416,7 @@ def check_rule(rule, email_data, spam_score=None, email_id=None):
         return any(results)
     return all(results)
 
-def evaluate(email, spam_score=None, email_id=None):
+def evaluate(email, spam_score=None, email_id=None, account_id=None):
     extra = {"email_id": email_id}
     fields = _extract_fields(email)
     fields["rspamd_score"] = spam_score
@@ -419,25 +427,40 @@ def evaluate(email, spam_score=None, email_id=None):
     )
 
     with _rules_lock:
-        rules = list(_rules)
+        if account_id and account_id in _rules:
+            rules = list(_rules[account_id])
+        else:
+            # Fallback: merge all loaded rules (backward compat)
+            rules = []
+            for rule_list in _rules.values():
+                rules.extend(rule_list)
 
     logger.debug("Checking %s rule(s)", len(rules), extra=extra)
 
+    matched_rule = None
     for rule in rules:
         conditions = rule["conditions"]
         match_type = rule["match"]
 
         results = [_match_condition(c, fields, rule["name"]) for c in conditions]
 
+        is_match = False
         if match_type == "all" and all(results):
-            logger.info("Email matched rule '%s' (match=all, %s/%s conditions met)", rule["name"], sum(results), len(results), extra=extra)
-            return rule
+            is_match = True
+        elif match_type == "any" and any(results):
+            is_match = True
 
-        if match_type == "any" and any(results):
-            logger.info("Email matched rule '%s' (match=any, %s/%s conditions met)", rule["name"], sum(results), len(results), extra=extra)
-            return rule
+        if is_match:
+            logger.info("Email matched rule '%s' (match=%s, %s/%s conditions met)", rule["name"], match_type, sum(results), len(results), extra=extra)
+            matched_rule = rule
+            if not rule.get("continue_processing", False):
+                return rule
+            logger.debug("Rule '%s' has continue_processing=True, continuing evaluation", rule["name"], extra=extra)
+        else:
+            logger.debug("Rule '%s' did not match (match=%s, results=%s)", rule["name"], match_type, results, extra=extra)
 
-        logger.debug("Rule '%s' did not match (match=%s, results=%s)", rule["name"], match_type, results, extra=extra)
+    if matched_rule:
+        return matched_rule
 
     logger.debug("Email did not match any rules", extra=extra)
     return None

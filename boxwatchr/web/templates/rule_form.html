@@ -167,6 +167,17 @@
         </div>
     </div>
 
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="card-subtitle">Options</h2>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="continue_processing" value="1" id="continue_processing" {% if rule.continue_processing %}checked{% endif %}>
+                <label class="form-check-label" for="continue_processing">Continue processing</label>
+                <div class="form-text">When checked, matching emails will continue to be evaluated against subsequent rules instead of stopping at this one.</div>
+            </div>
+        </div>
+    </div>
+
     <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary">Save Rule</button>
         <a href="/rules" class="btn btn-outline-secondary">Cancel</a>

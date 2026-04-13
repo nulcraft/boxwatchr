@@ -1,0 +1,71 @@
+{% extends "app.html" %}
+{% block title %}boxwatchr / Presets{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h1 class="h4 fw-semibold mb-0 page-title"><i class="bi bi-shield-fill page-title-icon"></i>Presets</h1>
+</div>
+
+<p class="small text-secondary mb-4">Preset packs contain ready-made filter patterns for common spam topics. Enable a preset to automatically create rules that match those patterns. You can inspect and edit the patterns in each preset.</p>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category, message in messages %}
+<div class="alert alert-{{ category }} py-2 px-3 small mb-4">{{ message }}</div>
+{% endfor %}
+{% endwith %}
+
+{% if not presets %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <p class="text-secondary mb-0">No presets available.</p>
+    </div>
+</div>
+{% endif %}
+
+{% set categories = {} %}
+{% for preset in presets %}
+    {% if preset.category not in categories %}
+        {% if categories.update({preset.category: []}) %}{% endif %}
+    {% endif %}
+    {% if categories[preset.category].append(preset) %}{% endif %}
+{% endfor %}
+
+{% for category, cat_presets in categories.items() %}
+<h2 class="h6 fw-semibold text-secondary text-uppercase mt-4 mb-3">{{ category }}</h2>
+{% for preset in cat_presets %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <a href="/presets/{{ preset.id }}" class="fw-semibold text-decoration-none">{{ preset.name }}</a>
+                    {% if preset.built_in %}<span class="badge text-bg-secondary">built-in</span>{% endif %}
+                    {% if preset.enabled %}
+                    <span class="badge text-bg-success">active</span>
+                    {% endif %}
+                </div>
+                <p class="small text-secondary mb-1">{{ preset.description }}</p>
+                <span class="small text-secondary">{{ preset.patterns|length }} pattern(s)</span>
+            </div>
+            <div class="d-flex gap-2">
+                <form method="post" action="/presets/{{ preset.id }}/toggle">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm {% if preset.enabled %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                        {% if preset.enabled %}Disable{% else %}Enable{% endif %}
+                    </button>
+                </form>
+                <a href="/presets/{{ preset.id }}/edit" class="btn btn-outline-secondary btn-sm">Edit</a>
+                {% if not preset.built_in %}
+                <form method="post" action="/presets/{{ preset.id }}/delete" onsubmit="return confirm('Delete this preset?');">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endfor %}
+
+{% endblock %}

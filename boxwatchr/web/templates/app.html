@@ -30,8 +30,34 @@
                     <a href="/emails" class="nav-link site-nav-link{% if request.path.startswith('/emails') %} active{% endif %}"><i class="bi bi-envelope-fill site-nav-icon"></i>emails</a>
                     <a href="/rules" class="nav-link site-nav-link{% if request.path.startswith('/rules') %} active{% endif %}"><i class="bi bi-funnel-fill site-nav-icon"></i>rules</a>
                     <a href="/training" class="nav-link site-nav-link{% if request.path == '/training' %} active{% endif %}"><i class="bi bi-mortarboard-fill site-nav-icon"></i>training</a>
+                    <a href="/presets" class="nav-link site-nav-link{% if request.path.startswith('/presets') %} active{% endif %}"><i class="bi bi-shield-fill site-nav-icon"></i>presets</a>
                     <a href="/logs" class="nav-link site-nav-link{% if request.path == '/logs' %} active{% endif %}"><i class="bi bi-file-text-fill site-nav-icon"></i>logs</a>
+                    <a href="/accounts" class="nav-link site-nav-link{% if request.path.startswith('/accounts') %} active{% endif %}"><i class="bi bi-people-fill site-nav-icon"></i>accounts</a>
                     <a href="/config" class="nav-link site-nav-link{% if request.path == '/config' %} active{% endif %}"><i class="bi bi-gear-fill site-nav-icon"></i>config</a>
+                    {% if all_accounts|length > 1 %}
+                    <div class="dropdown ms-md-2">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-fill me-1"></i>{{ selected_account_name }}
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <form method="post" action="/accounts/select/all">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item{% if not selected_account_id %} active{% endif %}">All Accounts</button>
+                                </form>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% for acct in all_accounts %}
+                            <li>
+                                <form method="post" action="/accounts/select/{{ acct.id }}">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="dropdown-item{% if selected_account_id == acct.id %} active{% endif %}">{{ acct.name }}{% if not acct.enabled %} <span class="text-secondary">(disabled)</span>{% endif %}</button>
+                                </form>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
                     {% if show_logout %}
                     <form method="post" action="/logout" class="ms-lg-auto">
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">

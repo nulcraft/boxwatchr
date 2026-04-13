@@ -1,0 +1,65 @@
+{% extends "app.html" %}
+{% block title %}boxwatchr / Accounts{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h1 class="h4 fw-semibold mb-0 page-title"><i class="bi bi-people-fill page-title-icon"></i>Accounts</h1>
+    <a href="/accounts/new" class="btn btn-primary btn-sm">Add Account</a>
+</div>
+
+{% if not accounts %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <p class="text-secondary mb-3">No accounts configured yet.</p>
+        <a href="/accounts/new" class="btn btn-primary btn-sm">Add your first account</a>
+    </div>
+</div>
+{% endif %}
+
+{% for account in accounts %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="fw-semibold">{{ account.name }}</span>
+                    {% if account.enabled %}
+                    <span class="badge text-bg-success">enabled</span>
+                    {% else %}
+                    <span class="badge text-bg-secondary">disabled</span>
+                    {% endif %}
+                </div>
+                <div class="small text-secondary">
+                    <span>{{ account.host }}:{{ account.port }}</span>
+                    <span class="mx-1">&middot;</span>
+                    <span>{{ account.username }}</span>
+                    <span class="mx-1">&middot;</span>
+                    <span>{{ account.folder }}</span>
+                    <span class="mx-1">&middot;</span>
+                    <span>{{ account.tls_mode }}</span>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <form method="post" action="/accounts/{{ account.id }}/toggle">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm">
+                        {% if account.enabled %}Disable{% else %}Enable{% endif %}
+                    </button>
+                </form>
+                <a href="/accounts/{{ account.id }}/edit" class="btn btn-outline-secondary btn-sm">Edit</a>
+                {% if accounts|length > 1 %}
+                <form method="post" action="/accounts/{{ account.id }}/delete" onsubmit="return confirm('Delete account {{ account.name }}? This will also delete all associated rules and email records.');">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<div class="small text-secondary mt-4">
+    <p class="mb-1">Each account runs its own independent IMAP watcher. Adding or removing accounts requires a container restart to take effect.</p>
+</div>
+{% endblock %}

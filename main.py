@@ -2,6 +2,7 @@ import json
 import uuid
 import time
 import signal as _signal
+import threading
 from datetime import datetime, timezone
 from email.header import decode_header, make_header
 from email import message_from_bytes, message_from_string
@@ -22,11 +23,16 @@ _BANNER = r"""
 """
 
 _shutdown = False
+_watchers = []
+_watchers_lock = threading.Lock()
 
 def _handle_sigterm(signum, frame):
     global _shutdown
     logger.info("Received SIGTERM, shutting down gracefully")
     _shutdown = True
+    with _watchers_lock:
+        for w in _watchers:
+            w.stop()
     imap.request_stop()
 
 def _print_banner():
@@ -36,16 +42,18 @@ def _print_banner():
     print(__version__.center(width), flush=True)
     print(flush=True)
 
-def _print_startup_checks(loaded_rules):
+def _print_startup_checks(accounts, all_rules):
     divider = "=" * 35
     print(divider, flush=True)
     print("boxwatchr checks", flush=True)
     print(divider, flush=True)
     print("RSPAMD password configured", flush=True)
-    print("IMAP server: %s:%s" % (config.IMAP_HOST, config.IMAP_PORT), flush=True)
-    print("Monitoring folder: %s" % config.IMAP_FOLDER, flush=True)
+    print("Accounts configured: %d" % len(accounts), flush=True)
+    for acct in accounts:
+        print("  [%s] %s:%s -> %s" % (acct["name"], acct["host"], acct["port"], acct["folder"]), flush=True)
     print("Dry run: %s" % ("enabled" if config.DRYRUN else "disabled"), flush=True)
-    print("Rules loaded: %d" % len(loaded_rules), flush=True)
+    total_rules = sum(len(r) for r in all_rules.values()) if isinstance(all_rules, dict) else len(all_rules)
+    print("Rules loaded: %d" % total_rules, flush=True)
     print(flush=True)
 
 def _fatal_exit(message):
@@ -92,37 +100,40 @@ def _parse_attachments(raw_message):
         logger.warning("Could not parse attachments: %s", e)
     return attachments
 
-def startup_scan(client):
-    logger.info("Scanning %s for untracked emails", config.IMAP_FOLDER)
+def startup_scan(client, account):
+    account_id = account["id"]
+    folder = account["folder"]
+    logger.info("[%s] Scanning %s for untracked emails", account["name"], folder)
 
     current_uids = imap.get_existing_uids(client)
-    known_uids = get_known_uids(config.IMAP_FOLDER, account_id=config.ACCOUNT_ID)
+    known_uids = get_known_uids(folder, account_id=account_id)
     untracked = current_uids - known_uids
 
     if not untracked:
-        logger.debug("No untracked emails found in %s", config.IMAP_FOLDER)
+        logger.debug("[%s] No untracked emails found in %s", account["name"], folder)
         return current_uids
 
-    logger.info("Found %s untracked email(s) in %s, processing now", len(untracked), config.IMAP_FOLDER)
+    logger.info("[%s] Found %s untracked email(s) in %s, processing now", account["name"], len(untracked), folder)
 
     for uid in sorted(untracked, reverse=True):
-        logger.debug("Startup scan: processing untracked UID %s", uid)
+        logger.debug("[%s] Startup scan: processing untracked UID %s", account["name"], uid)
         try:
             message = imap.fetch_message(client, uid)
-            process_email(client, uid, message, current_uids=current_uids)
+            process_email(client, uid, message, account=account, current_uids=current_uids)
         except Exception as e:
-            logger.error("Failed to process email UID %s during startup scan: %s", uid, e)
+            logger.error("[%s] Failed to process email UID %s during startup scan: %s", account["name"], uid, e)
 
-    logger.debug("Startup scan complete")
+    logger.debug("[%s] Startup scan complete", account["name"])
     return current_uids
 
-def reprocess_pending_emails(client, current_uids):
-    pending = get_unprocessed_emails(account_id=config.ACCOUNT_ID)
+def reprocess_pending_emails(client, current_uids, account):
+    account_id = account["id"]
+    pending = get_unprocessed_emails(account_id=account_id)
     if not pending:
-        logger.debug("No pending emails to reprocess")
+        logger.debug("[%s] No pending emails to reprocess", account["name"])
         return
 
-    logger.info("Found %s pending email(s) to reprocess", len(pending))
+    logger.info("[%s] Found %s pending email(s) to reprocess", account["name"], len(pending))
 
     for row in pending:
         email_id = row["id"]
@@ -131,15 +142,15 @@ def reprocess_pending_emails(client, current_uids):
         processed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
         logger.debug(
-            "Reprocessing pending email %s (UID %s, spam_score=%s)",
-            email_id, uid, spam_score,
+            "[%s] Reprocessing pending email %s (UID %s, spam_score=%s)",
+            account["name"], email_id, uid, spam_score,
             extra={"email_id": email_id}
         )
 
         if uid not in current_uids:
             logger.info(
-                "Pending email UID %s no longer in %s, marking processed",
-                uid, config.IMAP_FOLDER,
+                "[%s] Pending email UID %s no longer in folder, marking processed",
+                account["name"], uid,
                 extra={"email_id": email_id}
             )
             enqueue_email_update(
@@ -162,11 +173,11 @@ def reprocess_pending_emails(client, current_uids):
             "attachments": stored_attachments,
         }
 
-        matched_rule = rules.evaluate(email_data, spam_score=spam_score, email_id=email_id)
+        matched_rule = rules.evaluate(email_data, spam_score=spam_score, email_id=email_id, account_id=account_id)
         rule_name = matched_rule["name"] if matched_rule else "none"
         logger.info(
-            "Pending email UID %s re-evaluated: rule=%s",
-            uid, rule_name, extra={"email_id": email_id}
+            "[%s] Pending email UID %s re-evaluated: rule=%s",
+            account["name"], uid, rule_name, extra={"email_id": email_id}
         )
 
         actions = []
@@ -176,8 +187,8 @@ def reprocess_pending_emails(client, current_uids):
                       [a for a in rule_actions if a["type"] in TERMINAL_ACTIONS]
 
         logger.debug(
-            "Pending email UID %s: %s action(s) to execute: %s",
-            uid, len(actions), [a["type"] for a in actions],
+            "[%s] Pending email UID %s: %s action(s) to execute: %s",
+            account["name"], uid, len(actions), [a["type"] for a in actions],
             extra={"email_id": email_id}
         )
 
@@ -200,8 +211,8 @@ def reprocess_pending_emails(client, current_uids):
                 executed.append((action, "skipped"))
                 continue
             logger.info(
-                "Reprocessing pending email UID %s: action=%s, destination=%s, rule=%s",
-                uid, action_type, action.get("destination") or "none", rule_name,
+                "[%s] Reprocessing pending email UID %s: action=%s, destination=%s, rule=%s",
+                account["name"], uid, action_type, action.get("destination") or "none", rule_name,
                 extra={"email_id": email_id}
             )
             try:
@@ -209,8 +220,8 @@ def reprocess_pending_emails(client, current_uids):
                 executed.append((action, False))
             except Exception as e:
                 logger.error(
-                    "Failed to execute action %s on pending email UID %s: %s",
-                    action_type, uid, e,
+                    "[%s] Failed to execute action %s on pending email UID %s: %s",
+                    account["name"], action_type, uid, e,
                     extra={"email_id": email_id}
                 )
                 executed.append((action, True))
@@ -250,11 +261,16 @@ def reprocess_pending_emails(client, current_uids):
             processed_notes=processed_notes,
             history=current_history + new_history_entries,
         )
-        logger.debug("Enqueued update for pending email %s", email_id, extra={"email_id": email_id})
+        logger.debug("[%s] Enqueued update for pending email %s", account["name"], email_id, extra={"email_id": email_id})
 
-    logger.debug("Pending email reprocessing complete")
+    logger.debug("[%s] Pending email reprocessing complete", account["name"])
 
-def process_email(client, uid, message, current_uids=None):
+def process_email(client, uid, message, account=None, current_uids=None):
+    # Use account dict if provided, fall back to config globals
+    account_id = account["id"] if account else config.ACCOUNT_ID
+    account_name = account["name"] if account else config.ACCOUNT_NAME
+    folder = account["folder"] if account else config.IMAP_FOLDER
+
     email_id = None
     email_enqueued = False
     set_processing(True)
@@ -302,13 +318,13 @@ def process_email(client, uid, message, current_uids=None):
         email_id = uuid.uuid4().hex[:12]
 
         logger.debug(
-            "Email UID %s: sender=%s, subject=%r, recipients=%s",
-            uid, sender, subject, recipients,
+            "[%s] Email UID %s: sender=%s, subject=%r, recipients=%s",
+            account_name, uid, sender, subject, recipients,
             extra={"email_id": email_id}
         )
         logger.debug(
-            "Email UID %s: size=%s bytes, date=%s, email_id=%s, content_hash=%s",
-            uid, message_size, date_received, email_id, content_hash,
+            "[%s] Email UID %s: size=%s bytes, date=%s, email_id=%s, content_hash=%s",
+            account_name, uid, message_size, date_received, email_id, content_hash,
             extra={"email_id": email_id}
         )
 
@@ -318,14 +334,14 @@ def process_email(client, uid, message, current_uids=None):
             existing_uid = int(existing["uid"])
             if current_uids is not None and existing_uid in current_uids:
                 logger.info(
-                    "Email UID %s is a duplicate of UID %s (same content hash, both present on server), skipping",
-                    uid, existing["uid"],
+                    "[%s] Email UID %s is a duplicate of UID %s (same content hash, both present on server), skipping",
+                    account_name, uid, existing["uid"],
                     extra={"email_id": existing["id"]}
                 )
             else:
                 logger.info(
-                    "Email UID %s already tracked (id=%s, previous uid=%s), updating UID",
-                    uid, existing["id"], existing["uid"],
+                    "[%s] Email UID %s already tracked (id=%s, previous uid=%s), updating UID",
+                    account_name, uid, existing["id"], existing["uid"],
                     extra={"email_id": existing["id"]}
                 )
                 email_id = existing["id"]
@@ -335,8 +351,8 @@ def process_email(client, uid, message, current_uids=None):
 
         attachments = _parse_attachments(raw_message)
         logger.debug(
-            "Email UID %s: %s attachment(s): %s",
-            uid, len(attachments), [a["name"] for a in attachments],
+            "[%s] Email UID %s: %s attachment(s): %s",
+            account_name, uid, len(attachments), [a["name"] for a in attachments],
             extra={"email_id": email_id}
         )
 
@@ -348,13 +364,13 @@ def process_email(client, uid, message, current_uids=None):
             "attachments": attachments,
         }
 
-        logger.info("Processing email UID %s from %s", uid, sender, extra={"email_id": email_id})
+        logger.info("[%s] Processing email UID %s from %s", account_name, uid, sender, extra={"email_id": email_id})
 
         spam_score = spam.get_rspamd_score(raw_message, email_id=email_id)
         if spam_score is None:
             raise RuntimeError("rspamd unreachable")
 
-        matched_rule = rules.evaluate(email_data, spam_score=spam_score, email_id=email_id)
+        matched_rule = rules.evaluate(email_data, spam_score=spam_score, email_id=email_id, account_id=account_id)
         rule_name = matched_rule["name"] if matched_rule else "none"
 
         actions = []
@@ -364,8 +380,8 @@ def process_email(client, uid, message, current_uids=None):
                       [a for a in rule_actions if a["type"] in TERMINAL_ACTIONS]
 
         logger.debug(
-            "Email UID %s: spam_score=%.2f, rule=%s, %s action(s): %s",
-            uid, spam_score, rule_name, len(actions), [a["type"] for a in actions],
+            "[%s] Email UID %s: spam_score=%.2f, rule=%s, %s action(s): %s",
+            account_name, uid, spam_score, rule_name, len(actions), [a["type"] for a in actions],
             extra={"email_id": email_id}
         )
 
@@ -376,8 +392,8 @@ def process_email(client, uid, message, current_uids=None):
         for action in imap_actions:
             action_type = action["type"]
             logger.debug(
-                "Executing action %s (destination=%s) for UID %s",
-                action_type, action.get("destination") or "none", uid,
+                "[%s] Executing action %s (destination=%s) for UID %s",
+                account_name, action_type, action.get("destination") or "none", uid,
                 extra={"email_id": email_id}
             )
             try:
@@ -450,7 +466,7 @@ def process_email(client, uid, message, current_uids=None):
 
         enqueue_email(
             uid=str(uid),
-            folder=config.IMAP_FOLDER,
+            folder=folder,
             sender=sender,
             recipients=",".join(recipients),
             subject=subject,
@@ -468,26 +484,98 @@ def process_email(client, uid, message, current_uids=None):
             history=history,
             message_id=message_id or None,
             rspamd_learned=rspamd_learned,
-            account_id=config.ACCOUNT_ID,
+            account_id=account_id,
             content_hash=content_hash,
         )
 
         email_enqueued = True
         logger.info(
-            "Email UID %s processed: actions=[%s], rule=%s, spam_score=%.2f",
-            uid, ", ".join(a["type"] for a in actions) if actions else "none", rule_name, spam_score,
+            "[%s] Email UID %s processed: actions=[%s], rule=%s, spam_score=%.2f",
+            account_name, uid, ", ".join(a["type"] for a in actions) if actions else "none", rule_name, spam_score,
             extra={"email_id": email_id}
         )
 
     except Exception as e:
-        logger.error("Failed to process email UID %s: %s", uid, e)
+        logger.error("[%s] Failed to process email UID %s: %s", account_name if account else "default", uid, e)
         raise
     finally:
         if email_id is not None and not email_enqueued:
             clear_email_id_from_logs(email_id)
         set_processing(False)
 
+
+class AccountWatcher:
+    """Runs the IMAP watch loop for a single account in its own thread."""
+
+    BACKOFF_MIN = 5
+    BACKOFF_MAX = 120
+
+    def __init__(self, account):
+        self.account = account
+        self.account_id = account["id"]
+        self.account_name = account["name"]
+        self._stop_event = threading.Event()
+        self._reconnect_event = threading.Event()
+        self._thread = None
+        self._backoff = self.BACKOFF_MIN
+
+    def start(self):
+        self._thread = threading.Thread(
+            target=self._run, daemon=True, name="watcher-%s" % self.account_name
+        )
+        self._thread.start()
+        logger.info("[%s] Account watcher started", self.account_name)
+
+    def stop(self):
+        self._stop_event.set()
+        self._reconnect_event.set()
+
+    def is_alive(self):
+        return self._thread is not None and self._thread.is_alive()
+
+    def _run(self):
+        while not self._stop_event.is_set():
+            try:
+                logger.debug("[%s] Starting connection cycle", self.account_name)
+                startup_client = imap.connect(account=self.account)
+                imap.select_folder(startup_client, self.account["folder"])
+                try:
+                    current_uids = startup_scan(startup_client, self.account)
+                    reprocess_pending_emails(startup_client, current_uids, self.account)
+                finally:
+                    startup_client.logout()
+                    logger.debug("[%s] Startup client logged out", self.account_name)
+
+                if self._stop_event.is_set():
+                    break
+
+                self._backoff = self.BACKOFF_MIN
+
+                logger.debug("[%s] Entering IMAP watch loop", self.account_name)
+                imap.watch(
+                    callback=lambda c, uid, msg: process_email(c, uid, msg, account=self.account),
+                    account=self.account,
+                    stop_event=self._stop_event,
+                    reconnect_event=self._reconnect_event,
+                    rescan_callback=lambda c: startup_scan(c, self.account),
+                )
+
+            except FatalImapError as e:
+                logger.error("[%s] Fatal IMAP error: %s — watcher stopping", self.account_name, e)
+                break
+            except Exception as e:
+                if self._stop_event.is_set():
+                    break
+                logger.warning("[%s] IMAP connection dropped: %s — reconnecting in %ss", self.account_name, e, self._backoff)
+                self._stop_event.wait(self._backoff)
+                self._backoff = min(self._backoff * 2, self.BACKOFF_MAX)
+
+        logger.info("[%s] Account watcher stopped", self.account_name)
+
+
 def main():
+    global _shutdown
+
     _signal.signal(_signal.SIGTERM, _handle_sigterm)
 
     _print_banner()
@@ -507,47 +595,48 @@ def main():
         logger.info("Shutting down")
         return
 
-    loaded_rules = health.load_rules_startup()
+    accounts = config.get_all_account_dicts()
+    if not accounts:
+        logger.error("No accounts configured. Open the web dashboard to add an account.")
+        while not _shutdown:
+            time.sleep(1)
+        logger.info("Shutting down")
+        return
 
-    health.start_imap(loaded_rules)
+    # Load rules for all accounts
+    all_rules = {}
+    for acct in accounts:
+        loaded = rules.load_rules(acct["id"])
+        all_rules[acct["id"]] = loaded
+        logger.info("[%s] Loaded %s rule(s)", acct["name"], len(loaded))
 
-    _print_startup_checks(loaded_rules)
+    # Verify IMAP connectivity for each account
+    for acct in accounts:
+        health.start_imap_for_account(acct, all_rules.get(acct["id"], []))
+
+    _print_startup_checks(accounts, all_rules)
 
     health.start_monitor()
 
-    logger.info("boxwatchr is running")
+    logger.info("boxwatchr is running (%s account(s))", len(accounts))
+
+    # Start a watcher thread for each account
+    with _watchers_lock:
+        for acct in accounts:
+            watcher = AccountWatcher(acct)
+            _watchers.append(watcher)
+            watcher.start()
 
     try:
         while not _shutdown:
-            logger.debug("Starting connection cycle: connecting for startup scan")
-            startup_client = imap.connect()
-            imap.select_folder(startup_client)
-            try:
-                current_uids = startup_scan(startup_client)
-                reprocess_pending_emails(startup_client, current_uids)
-            finally:
-                startup_client.logout()
-                logger.debug("Startup client logged out")
-
-            if _shutdown:
-                break
-
-            try:
-                logger.debug("Entering IMAP watch loop")
-                imap.watch(process_email, rescan_callback=startup_scan)
-            except FatalImapError:
-                raise
-            except Exception as e:
-                if _shutdown:
-                    break
-                logger.warning("IMAP connection dropped, waiting to reconnect: %s", e)
-                health.wait_for_services()
-                logger.info("Services recovered, reconnecting...")
-
-    except FatalImapError as e:
-        _fatal_exit(str(e))
+            time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Shutting down")
+
+    # Stop all watchers
+    with _watchers_lock:
+        for w in _watchers:
+            w.stop()
 
     logger.info("Shutdown complete")
 

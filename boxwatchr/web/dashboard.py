@@ -3,7 +3,7 @@ import requests
 from flask import render_template
 from boxwatchr import config
 from boxwatchr.database import db_connection
-from boxwatchr.web.app import app, _require_auth, logger
+from boxwatchr.web.app import app, _require_auth, get_selected_account_id, logger
 
 def _get_rspamd_training_counts():
     try:
@@ -24,23 +24,33 @@ def _get_rspamd_training_counts():
         logger.error("Failed to fetch rspamd stat: %s", e)
         return None, None
 
-def _get_stats():
+def _get_stats(account_id=None):
     try:
         with db_connection() as conn:
-            total = conn.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
-            pending = conn.execute("SELECT COUNT(*) FROM emails WHERE processed = 0").fetchone()[0]
+            if account_id:
+                where = " WHERE account_id = ?"
+                params = (account_id,)
+            else:
+                where = ""
+                params = ()
 
-            rule_rows = conn.execute(
+            total = conn.execute("SELECT COUNT(*) FROM emails" + where, params).fetchone()[0]
+            pending = conn.execute("SELECT COUNT(*) FROM emails WHERE processed = 0" + (" AND account_id = ?" if account_id else ""), params).fetchone()[0]
+
+            rule_query = (
                 "SELECT JSON_EXTRACT(rule_matched, '$.name') AS rule_name, COUNT(*) AS cnt"
                 " FROM emails WHERE rule_matched IS NOT NULL"
-                " GROUP BY rule_name ORDER BY cnt DESC"
-            ).fetchall()
-
+            )
+            if account_id:
+                rule_query += " AND account_id = ?"
+            rule_query += " GROUP BY rule_name ORDER BY cnt DESC"
+            rule_rows = conn.execute(rule_query, params).fetchall()
             rule_counts = [(row["rule_name"], row["cnt"]) for row in rule_rows if row["rule_name"]]
 
-            score_rows = conn.execute(
-                "SELECT spam_score FROM emails WHERE spam_score IS NOT NULL"
-            ).fetchall()
+            score_query = "SELECT spam_score FROM emails WHERE spam_score IS NOT NULL"
+            if account_id:
+                score_query += " AND account_id = ?"
+            score_rows = conn.execute(score_query, params).fetchall()
 
             buckets = {"<0": 0, "0-2": 0, "2-5": 0, "5-10": 0, "10-15": 0, "15+": 0}
             for row in score_rows:
@@ -75,7 +85,8 @@ def _get_stats():
 @app.route("/dashboard")
 @_require_auth
 def dashboard():
-    stats = _get_stats()
+    account_id = get_selected_account_id()
+    stats = _get_stats(account_id or None)
     return render_template(
         "dashboard.html",
         stats=stats,
