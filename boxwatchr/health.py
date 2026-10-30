@@ -7,6 +7,7 @@ import threading
 import collections
 import requests
 from imapclient import IMAPClient
+from imapclient.exceptions import LoginError
 from boxwatchr import config
 from boxwatchr.database import flush as flush_db, initialize as db_initialize, start_flusher as db_start_flusher, verify as db_verify, DB_PATH as _db_path
 from boxwatchr import imap as _imap
@@ -24,6 +25,22 @@ _STARTUP_CHECK_INTERVAL = 5
 _STARTUP_PER_SERVICE_TIMEOUT = 30
 _DIVIDER = "=" * 35
 
+
+def _is_transient_imap_error(exc):
+    if isinstance(exc, (TimeoutError, socket.timeout, OSError, ConnectionError)):
+        return True
+    text = str(exc).lower()
+    return any(token in text for token in (
+        "timed out",
+        "socket error",
+        "connection reset",
+        "connection aborted",
+        "eof",
+        "read operation timed out",
+        "temporarily unavailable",
+    ))
+
+
 def _tcp_check(host, port):
     logger.debug("TCP check: connecting to %s:%s", host, port)
     try:
@@ -34,6 +51,7 @@ def _tcp_check(host, port):
     except OSError as e:
         logger.debug("TCP check: %s:%s unreachable: %s", host, port, e)
         return _CheckResult(False, str(e), False)
+
 
 def _check_rspamd():
     try:
@@ -49,19 +67,25 @@ def _check_rspamd():
         logger.debug("rspamd health check: failed: %s", e)
         return _CheckResult(False, str(e), False)
 
+
 def _check_redis():
     return _tcp_check("127.0.0.1", 6379)
+
 
 def _check_unbound():
     return _tcp_check("127.0.0.1", 5335)
 
+
 def _check_web():
     return _tcp_check("127.0.0.1", int(os.environ.get("WEB_PORT", 8143)))
+
 
 def _check_imap():
     if not config.SETUP_COMPLETE or not config.IMAP_HOST:
         return _CheckResult(True, "", False)
+
     logger.debug("IMAP health check: connecting to %s:%s", config.IMAP_HOST, config.IMAP_PORT)
+    client = None
     try:
         _use_ssl = config.IMAP_TLS_MODE != "none" and config.IMAP_TLS_MODE != "starttls"
         client = IMAPClient(config.IMAP_HOST, port=config.IMAP_PORT, ssl=_use_ssl, timeout=10)
@@ -73,11 +97,21 @@ def _check_imap():
 
     try:
         client.login(config.IMAP_USERNAME, config.IMAP_PASSWORD)
+    except LoginError as e:
+        try:
+            client.logout()
+        except Exception:
+            pass
+        logger.debug("IMAP health check: authentication failed: %s", e)
+        return _CheckResult(False, "authentication failed: %s" % e, True)
     except Exception as e:
         try:
             client.logout()
         except Exception:
             pass
+        if _is_transient_imap_error(e):
+            logger.debug("IMAP health check: authentication timed out or connection dropped: %s", e)
+            return _CheckResult(False, "authentication timed out or connection dropped: %s" % e, False)
         logger.debug("IMAP health check: authentication failed: %s", e)
         return _CheckResult(False, "authentication failed: %s" % e, True)
 
@@ -86,7 +120,15 @@ def _check_imap():
         client.logout()
         logger.debug("IMAP health check: OK")
         return _CheckResult(True, "", False)
-    except Exception:
+    except Exception as e:
+        if _is_transient_imap_error(e):
+            try:
+                client.logout()
+            except Exception:
+                pass
+            logger.debug("IMAP health check: folder select timed out or connection dropped: %s", e)
+            return _CheckResult(False, "IMAP folder check timed out or connection dropped: %s" % e, False)
+
         reason = "folder %r does not exist on the server" % config.IMAP_FOLDER
         try:
             folders = client.list_folders()
@@ -100,6 +142,7 @@ def _check_imap():
             pass
         logger.debug("IMAP health check: folder check failed for %r", config.IMAP_FOLDER)
         return _CheckResult(False, reason, True)
+
 
 def initialize_database():
     print(_DIVIDER, flush=True)
@@ -119,10 +162,12 @@ def initialize_database():
     logger.info("Database ready.")
     print(flush=True)
 
+
 def fatal_shutdown():
     flush_db()
     os.kill(os.getpid(), signal.SIGTERM)
     sys.exit(2)
+
 
 def load_rules_startup():
     print(_DIVIDER, flush=True)
@@ -139,11 +184,13 @@ def load_rules_startup():
     print(flush=True)
     return loaded_rules
 
+
 _STARTUP_SERVICES = [
     ("Unbound", _check_unbound),
     ("Redis", _check_redis),
     ("rspamd", _check_rspamd),
 ]
+
 
 def start_services_sequentially():
     for name, check_fn in _STARTUP_SERVICES:
@@ -186,6 +233,7 @@ def start_services_sequentially():
         logger.info("%s service is up and ready.", name)
         print(flush=True)
 
+
 def start_web():
     from boxwatchr.web.app import start_dashboard
     print(_DIVIDER, flush=True)
@@ -193,6 +241,7 @@ def start_web():
     print(_DIVIDER, flush=True)
     start_dashboard()
     print(flush=True)
+
 
 def start_imap(loaded_rules):
     print(_DIVIDER, flush=True)
@@ -274,7 +323,8 @@ def start_imap(loaded_rules):
     logger.info("IMAP service is up and ready.")
     print(flush=True)
 
-def service_check():
+
+def service_check(strict=False):
     logger.debug("Running service health check")
     checks = {
         "rspamd": _check_rspamd,
@@ -287,8 +337,9 @@ def service_check():
     for name, fn in checks.items():
         result = fn()
         if result.fatal:
-            logger.error("Fatal service failure (%s): %s. Shutting down.", name, result.reason)
-            fatal_shutdown()
+            if strict or name != "imap":
+                logger.error("Fatal service failure (%s): %s. Shutting down.", name, result.reason)
+                fatal_shutdown()
         if not result.ok:
             failed.append(name)
     if failed:
@@ -297,21 +348,23 @@ def service_check():
         logger.debug("All services healthy")
     return failed
 
+
 def wait_for_services():
     logger.info("Waiting for all services to recover...")
     while True:
-        failed = service_check()
+        failed = service_check(strict=False)
         if not failed:
             logger.info("All services recovered")
             return
         time.sleep(_RETRY_INTERVAL)
+
 
 def _monitor_loop():
     consecutive_failures = 0
     while True:
         time.sleep(_MONITOR_INTERVAL)
         logger.debug("Health monitor: running periodic service check")
-        failed = service_check()
+        failed = service_check(strict=False)
         if not failed:
             if consecutive_failures > 0:
                 logger.info("All services recovered after %s failure(s)", consecutive_failures)
@@ -323,11 +376,12 @@ def _monitor_loop():
                 consecutive_failures, _MAX_FAILURES
             )
             if consecutive_failures >= _MAX_FAILURES:
-                logger.error(
-                    "Services have been unavailable for too long. Still failing: %s. Shutting down.",
-                    ", ".join(failed)
+                logger.warning(
+                    "Services have been unavailable for too long (%s/%s). Continuing to monitor and retry without shutting down.",
+                    consecutive_failures, _MAX_FAILURES
                 )
-                fatal_shutdown()
+                consecutive_failures = 0
+
 
 def start_monitor():
     t = threading.Thread(target=_monitor_loop, daemon=True, name="health-monitor")
